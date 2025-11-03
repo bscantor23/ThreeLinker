@@ -1,0 +1,737 @@
+/* ========================================
+   PANEL DE COLABORACIÓN
+   ======================================== */
+
+.collaboration-panel {
+  position: fixed;
+  bottom: 30px;
+  right: 20px;
+  width: 300px;
+  height: auto;
+  max-height: 80vh;
+  overflow-y: auto;
+  cursor: default !important;
+  transition: height 0.15s ease;
+  z-index: 10000;
+  background: rgba(42, 42, 42, 0.95);
+  border: 1px solid #555;
+  border-radius: 8px;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.collaboration-panel:hover {
+  cursor: default !important;
+}
+
+/* ========================================
+   HEADER DEL PANEL
+   ======================================== */
+
+.collaboration-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #4a4a4a, #3a3a3a);
+  border-radius: 8px 8px 0 0;
+  cursor: default !important;
+  border-bottom: 1px solid #555;
+}
+
+.collaboration-header:hover {
+  cursor: default !important;
+}
+
+.collaboration-header .title {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.collapse-btn {
+  pointer-events: auto;
+  cursor: pointer !important;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 16px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.collapse-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ========================================
+   ESTADOS DEL PANEL (COLAPSADO)
+   ======================================== */
+
+.collaboration-panel.collapsed {
+  bottom: 20px;
+  overflow: hidden;
+}
+
+.collaboration-panel.collapsed .collaboration-content {
+  display: none !important;
+}
+
+.collaboration-content {
+  padding: 16px;
+  transition: all 0.15s ease;
+}
+
+/* ========================================
+   ESTADO DE CONEXIÓN
+   ======================================== */
+
+.collaboration-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.collaboration-status.connected {
+  background: rgba(76, 175, 80, 0.2);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.collaboration-status.disconnected {
+  background: rgba(244, 67, 54, 0.2);
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.collaboration-status.not-in-room {
+  background: rgba(255, 152, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.connected {
+  background-color: #4caf50;
+  box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+}
+
+.status-dot.disconnected {
+  background-color: #f44336;
+  box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+
+.status-text {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ========================================
+   FORMULARIOS Y CONTROLES
+   ======================================== */
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.form-label {
+  width: 80px;
+  flex-shrink: 0;
+  color: #cccccc;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.form-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.form-input::placeholder {
+  color: #888;
+}
+
+.password-input {
+  border-color: #ff9800;
+}
+
+/* ========================================
+   BOTONES
+   ======================================== */
+
+.btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  background: linear-gradient(135deg, #4caf50, #45a049);
+  color: white;
+  pointer-events: auto;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: #6c757d !important;
+  border: 1px solid #6c757d !important;
+  color: white !important;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #5a6268 !important;
+  border-color: #545b62 !important;
+}
+
+.btn-danger {
+  background: #dc3545 !important;
+  border: 1px solid #dc3545 !important;
+  color: white !important;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #c82333 !important;
+  border-color: #bd2130 !important;
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #ffc107, #e0a800);
+  color: #000000;
+}
+
+.btn-small {
+  font-size: 10px;
+  padding: 4px 8px;
+  width: 100%;
+  background: linear-gradient(135deg, #6c757d, #5a6268);
+  border: 1px solid #6c757d;
+  transition: all 0.3s ease;
+}
+
+.btn-small:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a6268, #495057);
+  border-color: #545b62;
+  transform: translateY(-1px);
+}
+
+.buttons-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.buttons-row .btn {
+  flex: 1;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Botones ocultos */
+.buttons-row .btn.hidden {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* ========================================
+   CONTROLES DE SALA
+   ======================================== */
+
+.room-controls {
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+/* Contenedor de información de sala actual */
+.room-controls .current-room-info {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.leave-room-row {
+  margin-top: 8px;
+  display: none;
+}
+
+.leave-room-row.visible {
+  display: block;
+}
+
+.leave-room-row .btn {
+  width: 100%;
+}
+
+/* Estilos específicos para botones de sala */
+.leave-room-row .btn.btn-danger {
+  background: #dc3545 !important;
+  border: 1px solid #dc3545 !important;
+  color: white !important;
+}
+
+.leave-room-row .btn.btn-danger:hover:not(:disabled) {
+  background: #c82333 !important;
+  border-color: #bd2130 !important;
+}
+
+.leave-room-row .btn.btn-secondary {
+  background: #6c757d !important;
+  border: 1px solid #6c757d !important;
+  color: white !important;
+}
+
+.leave-room-row .btn.btn-secondary:hover:not(:disabled) {
+  background: #5a6268 !important;
+  border-color: #545b62 !important;
+}
+
+.current-room-info {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: rgba(76, 175, 80, 0.4);
+  border: 1px solid rgba(76, 175, 80, 0.6);
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+}
+
+/* ========================================
+   SALAS DISPONIBLES
+   ======================================== */
+
+.rooms-section {
+  margin-top: 12px;
+  flex: 0 0 auto;
+}
+
+.section-title {
+  margin-bottom: 6px;
+  font-weight: bold;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.rooms-list-container {
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background-color: #222;
+}
+
+.rooms-list,
+.users-list {
+  /* Contenedores flexibles para los elementos */
+  display: flex;
+  flex-direction: column;
+}
+
+.room-item {
+  padding: 6px 8px;
+  border-bottom: 1px solid #333;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  transition: background-color 0.2s;
+}
+
+.room-item:hover {
+  background-color: #444;
+}
+
+.room-item:last-child {
+  border-bottom: none;
+}
+
+.room-info {
+  flex: 1;
+}
+
+.room-id {
+  font-weight: bold;
+  color: #4caf50;
+  margin-bottom: 2px;
+}
+
+.room-id.protected {
+  color: #ff9800;
+}
+
+.room-stats {
+  color: #999;
+  font-size: 10px;
+}
+
+.room-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #666;
+  flex-shrink: 0;
+}
+
+.room-status-indicator.has-editor {
+  background-color: #4caf50;
+}
+
+.empty-message {
+  color: #999;
+  font-style: italic;
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 11px;
+}
+
+/* ========================================
+   LISTA DE USUARIOS
+   ======================================== */
+
+.users-section {
+  margin-top: 12px;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #333;
+  font-size: 11px;
+}
+
+.user-item:last-child {
+  border-bottom: none;
+}
+
+.user-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #4caf50;
+  flex-shrink: 0;
+}
+
+.user-name {
+  flex: 1;
+  color: #ffffff;
+}
+
+.user-name.host {
+  font-weight: bold;
+  color: #ffd700;
+}
+
+.user-id {
+  font-size: 9px;
+  color: #888;
+  margin-left: 8px;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+
+@media (max-width: 768px) {
+  .collaboration-panel {
+    width: calc(100vw - 40px);
+    right: 20px;
+    left: 20px;
+    max-width: none;
+  }
+
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .form-label {
+    width: auto;
+    margin-bottom: 4px;
+  }
+
+  .buttons-row {
+    flex-direction: column;
+  }
+}
+
+@media (max-height: 600px) {
+  .collaboration-panel {
+    max-height: 90vh;
+  }
+
+  .rooms-list-container {
+    max-height: 100px;
+  }
+}
+
+/* ========================================
+   RESPONSIVE: OCULTAR EN PANTALLAS PEQUEÑAS
+   ======================================== */
+
+@media (max-width: 600px) {
+  .collaboration-panel {
+    display: none !important;
+  }
+  
+  /* Ocultar indicador de estado de conexión adicional */
+  #collaboration-status {
+    display: none !important;
+  }
+}
+
+/* Para tabletas en orientación vertical */
+@media (max-width: 768px) and (orientation: portrait) {
+  .collaboration-panel {
+    display: none !important;
+  }
+  
+  #collaboration-status {
+    display: none !important;
+  }
+}
+
+/* Para dispositivos muy pequeños */
+@media (max-width: 600px) {
+  .collaboration-panel {
+    display: none !important;
+  }
+  
+  #collaboration-status {
+    display: none !important;
+  }
+}
+
+/* ========================================
+   ELEMENTOS DE ESTADO GLOBALES
+   ======================================== */
+
+/* Estado de conexión */
+#collaboration-status {
+  position: fixed;
+  bottom: 100px;
+  left: 45px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: white;
+  font-size: 12px;
+  z-index: 10000;
+  width: auto;
+}
+
+#collaboration-status.status-success {
+  background-color: #4CAF50;
+}
+
+#collaboration-status.status-error {
+  background-color: #F44336;
+}
+
+#collaboration-status.status-info {
+  background-color: #2196F3;
+}
+
+/* Contador de usuarios */
+#user-count {
+  position: fixed;
+  bottom: 180px;
+  left: 45px;
+  padding: 4px 8px;
+  background-color: #444240ff;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10000;
+}
+
+/* Display de sala actual */
+#current-room {
+  position: fixed;
+  bottom: 140px;
+  left: 45px;
+  padding: 4px 8px;
+  background-color: #2196F3;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10000;
+}
+
+/* Contenedor de notificaciones */
+#notifications-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100001;
+  max-width: 350px;
+  pointer-events: none;
+}
+
+.notification {
+  margin-bottom: 10px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  color: white;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: slideInFromRight 0.3s ease-out;
+  pointer-events: auto;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+.notification.success {
+  background-color: #4CAF50;
+}
+
+.notification.error {
+  background-color: #F44336;
+}
+
+.notification.info {
+  background-color: #2196F3;
+}
+
+.notification.warning {
+  background-color: #FF9800;
+}
+
+/* ========================================
+   DIÁLOGO DE CONFIRMACIÓN
+   ======================================== */
+
+#collaboration-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100000;
+  backdrop-filter: blur(3px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.collaboration-dialog {
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideIn 0.3s ease-out;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.collaboration-dialog-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #ff6b6b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collaboration-dialog-message {
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+  color: #e0e0e0;
+}
+
+.collaboration-dialog-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.collaboration-dialog-btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.collaboration-dialog-btn.cancel {
+  border: 1px solid #666;
+  background: transparent;
+  color: #ccc;
+}
+
+.collaboration-dialog-btn.cancel:hover {
+  background: #444;
+  color: white;
+}
+
+.collaboration-dialog-btn.confirm {
+  border: none;
+  background: #ff4757;
+  color: white;
+  font-weight: 500;
+}
+
+.collaboration-dialog-btn.confirm:hover {
+  background: #ff3742;
+  transform: translateY(-1px);
+}

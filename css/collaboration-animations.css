@@ -1,0 +1,356 @@
+/* ========================================
+   ANIMACIONES Y EFECTOS PARA EL PANEL DE COLABORACIÓN
+   ======================================== */
+
+/* Animaciones de carga */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  40%, 43% {
+    transform: translate3d(0, -8px, 0);
+  }
+  70% {
+    transform: translate3d(0, -4px, 0);
+  }
+  90% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+/* Aplicar animaciones */
+.collaboration-panel {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.room-item {
+  animation: slideIn 0.2s ease-out;
+  transition: all 0.2s ease;
+}
+
+.room-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.room-item:nth-child(odd) {
+  animation-delay: 0.05s;
+}
+
+.room-item:nth-child(even) {
+  animation-delay: 0.1s;
+}
+
+.user-item {
+  animation: slideIn 0.2s ease-out;
+}
+
+.user-item:nth-child(1) { animation-delay: 0.1s; }
+.user-item:nth-child(2) { animation-delay: 0.15s; }
+.user-item:nth-child(3) { animation-delay: 0.2s; }
+.user-item:nth-child(4) { animation-delay: 0.25s; }
+.user-item:nth-child(5) { animation-delay: 0.3s; }
+
+/* Efectos de hover y focus mejorados */
+.btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn:hover::before {
+  left: 100%;
+}
+
+.form-input {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.form-input:focus {
+  transform: scale(1.02);
+}
+
+/* Efectos de pulsación para status dot */
+.status-dot.connected {
+  animation: pulse 2s infinite;
+}
+
+.status-dot.disconnected {
+  animation: pulse 2s infinite;
+  animation-timing-function: ease-in-out;
+}
+
+/* Animación de carga para elementos */
+.loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Transiciones suaves para cambios de estado */
+.collaboration-status,
+.current-room-info,
+.room-item,
+.user-item {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Efectos de aparición para notificaciones */
+.notification {
+  animation: bounce 0.6s ease-out;
+}
+
+/* Mejoras de accesibilidad */
+.btn:focus,
+.form-input:focus,
+.room-item:focus,
+.collapse-btn:focus {
+  outline: 2px solid #4CAF50;
+  outline-offset: 2px;
+}
+
+/* Modo de alto contraste */
+@media (prefers-contrast: high) {
+  .collaboration-panel {
+    border: 2px solid #ffffff;
+    background: #000000;
+  }
+  
+  .status-dot {
+    border: 1px solid #ffffff;
+  }
+  
+  .btn {
+    border: 1px solid #ffffff;
+  }
+}
+
+/* Reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .status-dot {
+    animation: none;
+  }
+}
+
+/* ========================================
+   ANIMACIONES PARA ACTUALIZACIONES INTELIGENTES
+   ======================================== */
+
+/* Animaciones para salas nuevas */
+.room-item-new {
+  animation: slideInFromRight 0.4s ease-out;
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Animaciones para salas que salen */
+.room-item.fade-out {
+  animation: slideOutToLeft 0.3s ease-in forwards;
+}
+
+@keyframes slideOutToLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px) scale(0.95);
+  }
+}
+
+/* Animaciones para salas actualizadas */
+.room-item.room-updated {
+  animation: pulseUpdate 0.5s ease-out;
+}
+
+@keyframes pulseUpdate {
+  0% {
+    background-color: rgba(76, 175, 80, 0.1);
+    transform: scale(1);
+  }
+  50% {
+    background-color: rgba(76, 175, 80, 0.3);
+    transform: scale(1.02);
+  }
+  100% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+/* Transición suave para lista de salas */
+.rooms-list {
+  transition: opacity 0.2s ease;
+}
+
+/* Animación mejorada para fade-in */
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ========================================
+   ANIMACIONES PARA EVITAR PARPADEO Y MEJORAR UX
+   ======================================== */
+
+.rooms-list.updating {
+  opacity: 0.7;
+}
+
+/* ========================================
+   ESTILOS PARA NOTIFICACIONES Y ELEMENTOS GLOBALES
+   ======================================== */
+
+/* Contenedor de notificaciones */
+.notifications-container {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+/* Responsive para elementos de colaboración */
+@media (max-width: 768px) {
+  .notifications-container {
+    left: 10px !important;
+    right: 10px !important;
+    max-width: none !important;
+  }
+  
+  #collaboration-status,
+  #user-count,
+  #current-room {
+    right: 10px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* Estados de conexión suaves */
+.collaboration-status {
+  transition: all 0.3s ease;
+}
+
+.status-dot {
+  transition: all 0.3s ease;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Animación para elementos que aparecen/desaparecen */
+.leave-room-row {
+  transition: all 0.3s ease;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+}
+
+.leave-room-row.visible {
+  opacity: 1;
+  max-height: 50px;
+}

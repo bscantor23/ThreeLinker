@@ -141,10 +141,7 @@ class SyncHandlers {
 
     // Copiar propiedades dinámicas
     for (const prop in updatedObject) {
-      if (
-        prop.startsWith("_") ||
-        typeof updatedObject[prop] === "function"
-      ) {
+      if (prop.startsWith("_") || typeof updatedObject[prop] === "function") {
         continue;
       }
 
@@ -265,6 +262,11 @@ class SyncHandlers {
   handleReceiveObjectRemoval(data) {
     if (this.isSyncing) return;
 
+    // Validar datos de entrada
+    if (!data || !data.objectId) {
+      return;
+    }
+
     if (
       data.originUserId &&
       this.collaborationManager.socket.id === data.originUserId
@@ -282,11 +284,23 @@ class SyncHandlers {
       );
 
       if (objectToRemove) {
+        // Verificar si el objeto a eliminar es el actualmente seleccionado
+        const wasSelected = this.editor.selected === objectToRemove;
+
+        // Si es el objeto seleccionado, deseleccionar primero
+        if (wasSelected) {
+          this.editor.select(null);
+        }
+
+        // Eliminar el objeto
         this.editor.removeObject(objectToRemove);
-        this.showNotification("Objeto eliminado", "info");
+        this.showNotification("Objeto eliminado por colaborador", "info");
       }
     } catch (error) {
-      this.showNotification("Error al eliminar objeto", "error");
+      this.showNotification(
+        "Error al eliminar objeto: " + error.message,
+        "error"
+      );
     } finally {
       this.isSyncing = false;
     }

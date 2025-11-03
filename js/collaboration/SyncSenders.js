@@ -258,17 +258,25 @@ class SyncSenders {
    * Sincroniza la eliminación de un objeto específico
    */
   syncObjectRemoval(object) {
-    if (!this.collaborationManager.currentRoom) return;
+    if (!this.collaborationManager.currentRoom) {
+      return;
+    }
+
+    if (!object || !object.uuid) {
+      return;
+    }
 
     try {
-      this.socket.emit("sync-editor-object-removal", {
+      const removalData = {
         roomId: this.collaborationManager.currentRoom,
         objectId: object.uuid,
         objectType: object.type,
-        objectName: object.name,
-      });
+        objectName: object.name || "Unnamed",
+        timestamp: Date.now()
+      };
+      this.socket.emit("sync-editor-object-removal", removalData);
     } catch (error) {
-      console.error("[SyncSenders] Error syncing object removal:", error);
+      this.collaborationManager?.showNotification?.("Error al sincronizar eliminación", "error");
     }
   }
 

@@ -271,9 +271,12 @@ function handleSyncEditorObjectRemoval(
 ) {
   try {
     const { roomId, objectId } = data;
+
+    // Validación más detallada
     if (!roomId || !objectId) {
       socket.emit("editor-sync-error", {
-        error: "Room ID and object ID are required",
+        error: "Room ID and object ID are required for object removal",
+        code: "MISSING_DATA",
       });
       return;
     }
@@ -281,13 +284,19 @@ function handleSyncEditorObjectRemoval(
     // Verificar que el usuario esté en la sala
     const user = userManager.getUser(socket.id);
     if (!user) {
-      socket.emit("editor-sync-error", { error: "User not found" });
+      socket.emit("editor-sync-error", {
+        error: "User not found",
+        code: "USER_NOT_FOUND",
+      });
       return;
     }
 
     const room = roomManager.getRoom(roomId);
     if (!room?.users.has(user.id)) {
-      socket.emit("editor-sync-error", { error: "User not in room" });
+      socket.emit("editor-sync-error", {
+        error: "User not in room",
+        code: "USER_NOT_IN_ROOM",
+      });
       return;
     }
 
@@ -295,7 +304,10 @@ function handleSyncEditorObjectRemoval(
     const result = editorManager.removeEditorObject(roomId, objectId, user.id);
 
     if (!result.success) {
-      socket.emit("editor-sync-error", { error: result.error });
+      socket.emit("editor-sync-error", {
+        error: result.error,
+        code: "REMOVAL_FAILED",
+      });
       return;
     }
 
@@ -312,7 +324,10 @@ function handleSyncEditorObjectRemoval(
       });
     }
   } catch (error) {
-    socket.emit("editor-sync-error", { error: "Internal server error" });
+    socket.emit("editor-sync-error", {
+      error: "Internal server error during object removal",
+      code: "INTERNAL_ERROR",
+    });
   }
 }
 

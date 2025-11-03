@@ -112,10 +112,7 @@ class CollaborationManager {
     });
 
     this.socket.on("connect_error", (error) => {
-      this.showNotification(
-        "Error de conexión al servidor: " + error.message,
-        "error"
-      );
+      console.error("[CollaborationManager] Connection error:", error);
     });
 
     this.socket.on("reconnect", (attemptNumber) => {

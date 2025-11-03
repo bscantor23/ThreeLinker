@@ -124,7 +124,11 @@ class EditorSynchronizer {
 
     // Manejo de errores
     this.socket.on("editor-sync-error", (data) => {
-      this.showNotification("Error de sincronización", "error");
+      const errorMessage = data?.error || "Error de sincronización desconocido";
+      this.showNotification(
+        "Error de sincronización: " + errorMessage,
+        "error"
+      );
     });
 
     // Manejo de sincronización pendiente

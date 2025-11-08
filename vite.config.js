@@ -3,8 +3,13 @@ import { defineConfig } from "vite";
 export default defineConfig({
   root: ".",
   server: {
-    port: 8080,
-    open: true,
+    port: 5173,
+    host: true, // Permite conexiones externas (necesario para Docker)
+    open: false, // No abrir navegador automáticamente en Docker
+    cors: true,
+    hmr: {
+      port: 5173,
+    },
   },
   build: {
     outDir: "dist",

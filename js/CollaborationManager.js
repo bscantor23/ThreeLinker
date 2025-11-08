@@ -2,7 +2,7 @@ import { io } from "socket.io-client";
 import { EditorSynchronizer } from "./collaboration/EditorSynchronizer.js";
 
 class CollaborationManager {
-  constructor(editor, serverUrl = "http://localhost:3001") {
+  constructor(editor, serverUrl = import.meta.env.VITE_SERVER_URL || "http://localhost:3001") {
     this.editor = editor;
     this.serverUrl = serverUrl;
     this.socket = null;

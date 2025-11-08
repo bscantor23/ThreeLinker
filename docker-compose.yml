@@ -1,6 +1,3 @@
-# Docker Compose para ThreeLinker - Producción
-version: '3.8'
-
 services:
   three-linker:
     build:

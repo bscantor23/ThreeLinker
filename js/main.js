@@ -33,14 +33,14 @@ console.log("Three.js Editor loaded with Vite");
 async function initializeCollaboration() {
   try {
     console.log("[Main] Starting collaboration initialization...");
-    
+
     // Importar el CollaborationManager
     const { CollaborationManager } = await import("./CollaborationManager.js");
-    
+
     // Esperar a que el editor esté disponible
     let attempts = 0;
     const maxAttempts = 50; // 5 segundos máximo
-    
+
     const waitForEditor = () => {
       return new Promise((resolve, reject) => {
         const checkEditor = () => {
@@ -57,36 +57,37 @@ async function initializeCollaboration() {
         checkEditor();
       });
     };
-    
+
     const editor = await waitForEditor();
-    
+
     // Crear e inicializar el CollaborationManager
-    globalThis.collaborationManager = new CollaborationManager(
-      editor,
-      "http://localhost:3001"
-    );
-    
+    globalThis.collaborationManager = new CollaborationManager(editor);
+
     console.log("[Main] Collaboration system initialized successfully");
-    
+
     // Agregar panel de colaboración al sidebar después de un breve delay
     setTimeout(async () => {
       try {
-        const { default: CollaborationPanel } = await import("./CollaborationPanel.js");
-        const collaborationPanel = CollaborationPanel(editor, globalThis.collaborationManager);
-        
+        const { default: CollaborationPanel } = await import(
+          "./CollaborationPanel.js"
+        );
+        const collaborationPanel = CollaborationPanel(
+          editor,
+          globalThis.collaborationManager
+        );
+
         // Buscar el sidebar y agregar la pestaña
-        const sidebar = document.querySelector('#sidebar');
+        const sidebar = document.querySelector("#sidebar");
         if (sidebar && sidebar.addTab) {
-          sidebar.addTab('collaboration', 'Colaboración', collaborationPanel);
+          sidebar.addTab("collaboration", "Colaboración", collaborationPanel);
           console.log("[Main] Collaboration panel added to sidebar");
         }
-        
+
         globalThis.collaborationPanel = collaborationPanel;
       } catch (error) {
         console.warn("[Main] Could not add collaboration panel:", error);
       }
     }, 1000);
-    
   } catch (error) {
     console.error("[Main] Failed to initialize collaboration:", error);
   }

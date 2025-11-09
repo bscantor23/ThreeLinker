@@ -20,6 +20,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: 0.17.0 # Specify the desired Buildx version
         
       - name: Create environment file
         run: |

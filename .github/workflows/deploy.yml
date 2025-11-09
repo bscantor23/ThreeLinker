@@ -37,6 +37,8 @@ jobs:
           docker system prune -f || true
           
       - name: Build and start services
+        env:
+          VITE_SERVER_URL: ${{ vars.DOMAIN }}
         run: |
           docker compose up --build -d
           

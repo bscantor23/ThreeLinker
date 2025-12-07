@@ -28,14 +28,15 @@ jobs:
           
       - name: Stop existing containers
         run: |
-          docker compose down || true
+          docker-compose down || true
           docker system prune -f || true
           
       - name: Build and start services
         env:
           VITE_SERVER_URL: ${{ vars.DOMAIN }}
         run: |
-          docker compose up --build -d
+          docker-compose build
+          docker-compose up -d
           
       - name: Wait for services to start
         run: |
@@ -45,12 +46,12 @@ jobs:
       - name: Verify deployment
         run: |
           # Check if containers are running
-          docker compose ps
+          docker-compose ps
           
       - name: Show service logs
         if: failure()
         run: |
           echo "=== Container Status ==="
-          docker compose ps
+          docker-compose ps
           echo "=== Service Logs ==="
-          docker compose logs --tail=50
+          docker-compose logs --tail=50

@@ -7,9 +7,19 @@
  * @param {Object} io - Instancia de Socket.IO
  * @param {RoomManager} roomManager - Gestor de salas
  */
-export function broadcastRoomsList(io, roomManager) {
-  const activeRooms = roomManager.getActiveRooms();
-  io.emit("rooms-list", activeRooms);
+export async function broadcastRoomsList(io, roomManager) {
+  try {
+    const activeRooms = await roomManager.getActiveRooms();
+    io.emit("rooms-list", activeRooms);
+    logServerEvent('ROOMS_LIST_BROADCAST', null, { 
+      roomCount: activeRooms.length,
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    logServerEvent('BROADCAST_ROOMS_ERROR', null, { 
+      error: error.message 
+    });
+  }
 }
 
 /**

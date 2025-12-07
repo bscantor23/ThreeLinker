@@ -105,7 +105,7 @@ export function setupUserHandlers(socket, io, roomManager, userManager) {
           socket.to(currentRoom).emit("user-left", {
             userId: socket.id,
             userName: userData.name || userInfo?.name || "Anónimo",
-            userCount: roomManager.getRoom(currentRoom)?.users.size || 0,
+            userCount: roomManager.getRoomSync(currentRoom)?.users.size || 0,
           });
 
           // Si la sala se eliminó porque quedó vacía, actualizar lista de salas

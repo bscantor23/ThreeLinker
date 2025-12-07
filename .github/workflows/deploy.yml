@@ -21,11 +21,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          version: v0.17.0
-        
       - name: Create environment file
         run: |
           echo "VITE_SERVER_URL=http://${{ vars.DOMAIN }}" > .env

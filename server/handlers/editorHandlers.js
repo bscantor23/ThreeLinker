@@ -156,7 +156,7 @@ function handleRequestEditorSync(
     }
 
     // Verificar que la sala existe
-    const room = roomManager.getRoom(roomId);
+    const room = roomManager.getRoomSync(roomId);
     if (!room) {
       socket.emit("editor-sync-error", { error: "Room not found" });
       return;
@@ -217,7 +217,7 @@ function handleSyncFullEditor(
       return;
     }
 
-    const room = roomManager.getRoom(roomId);
+    const room = roomManager.getRoomSync(roomId);
     if (!room || user.currentRoom !== roomId) {
       socket.emit("editor-sync-error", { error: "User not in specified room" });
       return;
@@ -291,7 +291,7 @@ function handleSyncEditorObjectRemoval(
       return;
     }
 
-    const room = roomManager.getRoom(roomId);
+    const room = roomManager.getRoomSync(roomId);
     if (!room?.users.has(user.id)) {
       socket.emit("editor-sync-error", {
         error: "User not in room",

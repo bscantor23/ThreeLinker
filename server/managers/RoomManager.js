@@ -1,9 +1,18 @@
 /**
  * Gestor de Salas - Maneja la creación, eliminación y gestión de salas de colaboración
+ * Ahora con soporte Redis para alta disponibilidad
  */
+import RedisManager from './RedisManager.js';
+import { REDIS_CONFIG } from '../config/serverConfig.js';
+import { logServerEvent } from '../utils/serverUtils.js';
+
 class RoomManager {
-  constructor() {
-    this.rooms = new Map();
+  constructor(redisManager = null) {
+    this.rooms = new Map(); // Cache local
+    this.redis = redisManager || new RedisManager();
+    this.keyPrefix = REDIS_CONFIG.KEYS.ROOM;
+    this.userRoomPrefix = REDIS_CONFIG.KEYS.USER_ROOM;
+    this.roomUsersPrefix = REDIS_CONFIG.KEYS.ROOM_USERS;
   }
 
   /**
@@ -14,15 +23,17 @@ class RoomManager {
    * @param {string|null} password - Contraseña de la sala (opcional)
    * @returns {Object} Datos de la sala creada
    */
-  createRoom(roomId, hostId, hostName, password = null) {
-    if (this.rooms.has(roomId)) {
+  async createRoom(roomId, hostId, hostName, password = null) {
+    // Verificar si la sala ya existe en Redis
+    const existingRoom = await this.redis.get(`${this.keyPrefix}${roomId}`);
+    if (existingRoom) {
       throw new Error(`La sala "${roomId}" ya existe`);
     }
 
     const roomData = {
       id: roomId,
       scene: null,
-      users: new Map(),
+      users: {}, // Convertimos Map a Object para serialización JSON
       createdAt: Date.now(),
       lastActivity: Date.now(),
       host: hostId,
@@ -31,17 +42,66 @@ class RoomManager {
     };
 
     // Agregar al anfitrión como primer usuario
-    roomData.users.set(hostId, {
+    const hostUser = {
       id: hostId,
       name: hostName || "Anónimo",
       joinedAt: Date.now(),
       role: "host",
-    });
+    };
 
-    this.rooms.set(roomId, roomData);
+    roomData.users[hostId] = hostUser;
+
+    // Guardar en Redis con TTL
+    await this.redis.set(
+      `${this.keyPrefix}${roomId}`, 
+      roomData, 
+      REDIS_CONFIG.TTL.ROOM
+    );
+
+    // Registrar en la lista global de salas
+    const localRoomData = {
+      ...roomData,
+      users: new Map([[hostId, hostUser]])
+    };
+    await this.redis.addRoomToGlobalList(roomId, localRoomData);
+
+    // Mantener en cache local para performance
+    this.rooms.set(roomId, localRoomData);
+
+    // Establecer relación user -> room
+    await this.redis.set(
+      `${this.userRoomPrefix}${hostId}`, 
+      roomId, 
+      REDIS_CONFIG.TTL.USER
+    );
+
     this.updateRoomActivity(roomId);
 
-    return roomData;
+    logServerEvent('ROOM_CREATED', roomId, {
+      hostId,
+      hostName,
+      isProtected: !!password
+    });
+
+    return localRoomData;
+  }
+
+  /**
+   * Obtiene roomId desde un socket para sticky routing
+   * @param {Object} socket - Socket del usuario
+   * @returns {string|null} roomId si está en una sala
+   */
+  async getRoomIdFromSocket(socket) {
+    // Primero buscar en cache local
+    for (const [roomId, room] of this.rooms) {
+      if (room.users.has(socket.id)) {
+        return roomId;
+      }
+    }
+
+    // Buscar en Redis si no está en cache
+    const roomId = await this.redis.get(`${this.userRoomPrefix}${socket.id}`);
+    return roomId;
   }
 
   /**
@@ -49,17 +109,51 @@ class RoomManager {
    * @param {string} roomId - ID de la sala
    * @returns {boolean}
    */
-  roomExists(roomId) {
-    return this.rooms.has(roomId);
+  async roomExists(roomId) {
+    // Verificar cache local primero
+    if (this.rooms.has(roomId)) {
+      return true;
+    }
+
+    // Verificar en Redis
+    const roomData = await this.redis.get(`${this.keyPrefix}${roomId}`);
+    return !!roomData;
   }
 
   /**
-   * Obtiene los datos de una sala
+   * Obtiene los datos de una sala (solo cache local)
+   * @param {string} roomId - ID de la sala
+   * @returns {Object|null} Datos de la sala o null si no existe en cache local
+   */
+  getRoomSync(roomId) {
+    return this.rooms.get(roomId) || null;
+  }
+
+  /**
+   * Obtiene los datos de una sala (con carga desde Redis si es necesario)
    * @param {string} roomId - ID de la sala
    * @returns {Object|null} Datos de la sala o null si no existe
    */
-  getRoom(roomId) {
-    return this.rooms.get(roomId) || null;
+  async getRoom(roomId) {
+    // Verificar cache local primero
+    let room = this.rooms.get(roomId);
+    
+    if (!room) {
+      // Cargar desde Redis si no está en cache
+      const redisData = await this.redis.get(`${this.keyPrefix}${roomId}`);
+      if (redisData) {
+        // Reconstruir Map de usuarios para compatibilidad local
+        room = {
+          ...redisData,
+          users: new Map(Object.entries(redisData.users || {}))
+        };
+        
+        // Agregar a cache local
+        this.rooms.set(roomId, room);
+      }
+    }
+    
+    return room || null;
   }
 
   /**
@@ -68,8 +162,8 @@ class RoomManager {
    * @param {string} password - Contraseña a verificar
    * @returns {boolean}
    */
-  verifyRoomPassword(roomId, password) {
-    const room = this.getRoom(roomId);
+  async verifyRoomPassword(roomId, password) {
+    const room = await this.getRoom(roomId);
     if (!room) return false;
     if (!room.isProtected) return true;
     return room.password === password;
@@ -82,8 +176,8 @@ class RoomManager {
    * @param {string} userName - Nombre del usuario
    * @returns {Object} Datos del usuario agregado
    */
-  addUserToRoom(roomId, userId, userName) {
-    const room = this.getRoom(roomId);
+  async addUserToRoom(roomId, userId, userName) {
+    const room = await this.getRoom(roomId);
     if (!room) {
       throw new Error(`La sala "${roomId}" no existe`);
     }
@@ -95,7 +189,32 @@ class RoomManager {
       role: "guest",
     };
 
+    // Actualizar tanto local como Redis
     room.users.set(userId, userData);
+
+    // Sincronizar con Redis - convertir Map a Object para serialización
+    const roomDataForRedis = {
+      ...room,
+      users: Object.fromEntries(room.users)
+    };
+    
+    await this.redis.set(
+      `${this.keyPrefix}${roomId}`, 
+      roomDataForRedis, 
+      REDIS_CONFIG.TTL.ROOM
+    );
+
+    // Actualizar contador de usuarios en la lista global
+    await this.redis.updateRoomInGlobalList(roomId, { 
+      userCount: room.users.size 
+    });
+
+    // Establecer relación user -> room
+    await this.redis.set(
+      `${this.userRoomPrefix}${userId}`, 
+      roomId, 
+      REDIS_CONFIG.TTL.USER
+    );
     this.updateRoomActivity(roomId);
 
     return userData;
@@ -108,7 +227,7 @@ class RoomManager {
    * @returns {Object|null} Datos del usuario removido
    */
   removeUserFromRoom(roomId, userId) {
-    const room = this.getRoom(roomId);
+    const room = this.getRoomSync(roomId);
     if (!room) return null;
 
     const userData = room.users.get(userId);
@@ -128,11 +247,23 @@ class RoomManager {
    * @param {string} roomId - ID de la sala
    * @returns {Object|null} Datos de la sala eliminada
    */
-  deleteRoom(roomId) {
-    const room = this.getRoom(roomId);
+  async deleteRoom(roomId) {
+    const room = await this.getRoom(roomId);
     if (!room) return null;
 
+    // Eliminar de Redis
+    await this.redis.del(`${this.keyPrefix}${roomId}`);
+    
+    // Eliminar de la lista global
+    await this.redis.removeRoomFromGlobalList(roomId);
+
+    // Eliminar del cache local
     this.rooms.delete(roomId);
+    
+    logServerEvent('ROOM_DELETED_FROM_GLOBAL', roomId, {
+      serverInstance: process.env.INSTANCE_ID || 'unknown'
+    });
+    
     return room;
   }
 
@@ -143,7 +274,7 @@ class RoomManager {
    * @returns {boolean}
    */
   isHost(roomId, userId) {
-    const room = this.getRoom(roomId);
+    const room = this.getRoomSync(roomId);
     return room ? room.host === userId : false;
   }
 
@@ -155,7 +286,7 @@ class RoomManager {
    * @returns {Object|null} Datos actualizados del usuario
    */
   updateUserName(roomId, userId, newName) {
-    const room = this.getRoom(roomId);
+    const room = this.getRoomSync(roomId);
     if (!room) return null;
 
     const user = room.users.get(userId);
@@ -174,7 +305,7 @@ class RoomManager {
    * @param {Object} sceneData - Datos de la escena
    */
   updateRoomScene(roomId, sceneData) {
-    const room = this.getRoom(roomId);
+    const room = this.getRoomSync(roomId);
     if (room) {
       room.scene = sceneData;
       this.updateRoomActivity(roomId);
@@ -186,17 +317,32 @@ class RoomManager {
    * @param {string} roomId - ID de la sala
    */
   updateRoomActivity(roomId) {
-    const room = this.getRoom(roomId);
+    const room = this.getRoomSync(roomId);
     if (room) {
       room.lastActivity = Date.now();
     }
   }
 
   /**
-   * Obtiene la lista de todas las salas activas
+   * Obtiene la lista de todas las salas activas (de TODOS los servidores)
    * @returns {Array} Lista de salas ordenadas por actividad
    */
-  getActiveRooms() {
+  async getActiveRooms() {
+    try {
+      // Intentar obtener de Redis primero (incluye todas las instancias)
+      const globalRooms = await this.redis.getAllGlobalRooms();
+      
+      if (globalRooms && globalRooms.length > 0) {
+        return globalRooms;
+      }
+    } catch (error) {
+      logServerEvent('GET_GLOBAL_ROOMS_ERROR', null, { 
+        error: error.message,
+        fallbackToLocal: true 
+      });
+    }
+    
+    // Fallback: devolver solo salas locales si Redis falla
     const activeRooms = Array.from(this.rooms.entries()).map(
       ([roomId, data]) => ({
         id: roomId,
@@ -206,6 +352,7 @@ class RoomManager {
         createdAt: data.createdAt || Date.now(),
         isProtected: data.isProtected || false,
         host: data.host,
+        serverInstance: process.env.INSTANCE_ID || 'local'
       })
     );
 
@@ -219,7 +366,7 @@ class RoomManager {
    * @returns {Array} Lista de usuarios en la sala
    */
   getRoomUsers(roomId) {
-    const room = this.getRoom(roomId);
+    const room = this.getRoomSync(roomId);
     return room ? Array.from(room.users.values()) : [];
   }
 

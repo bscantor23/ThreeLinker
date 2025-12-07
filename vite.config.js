@@ -14,6 +14,7 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    target: "es2022", // Soporta top-level await
     rollupOptions: {
       input: "index.html",
     },

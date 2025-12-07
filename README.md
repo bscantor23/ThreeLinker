@@ -37,15 +37,16 @@ ThreeLinker es un editor de Three.js con capacidades de colaboración en tiempo 
 ## 🚀 Instalación y Uso
 
 ### Requisitos Previos
-- Node.js (versión 16 o superior)
-- npm o yarn
+- Node.js (versión 18 o superior)
+- Docker y Docker Compose (para modo producción)
+- Redis (opcional, usa fallback en memoria)
 
 ### Instalación
 
 1. Clona el repositorio:
 ```bash
-git clone <tu-repositorio>
-cd three-linker
+git clone https://github.com/bscantor23/ThreeLinker.git
+cd ThreeLinker
 ```
 
 2. Instala las dependencias:
@@ -53,31 +54,42 @@ cd three-linker
 npm install
 ```
 
+3. Configura el entorno:
+```bash
+cp .env.example .env
+# Edita .env según tu configuración
+```
+
 ### Modos de Ejecución
 
-#### Modo Solo (Sin Colaboración)
-Para usar solo el editor sin funcionalidades de colaboración:
+#### Desarrollo Local (Modo Simple)
 ```bash
-npm run dev
+npm run dev:full
 ```
 Abre http://localhost:5173 en tu navegador.
 
-#### Modo Colaborativo
-Para usar todas las funcionalidades incluyendo colaboración en tiempo real:
-
-1. Inicia el servidor de colaboración:
+#### Alta Disponibilidad (Producción)
 ```bash
-npm run server
+# Iniciar toda la arquitectura con Docker
+npm run docker:start
+
+# Ver logs
+npm run docker:logs
+
+# Detener servicios
+npm run docker:stop
 ```
 
-2. En otra terminal, inicia el cliente:
+#### Desarrollo con Alta Disponibilidad
 ```bash
+# Servidor 1
+npm run server:3001
+
+# Servidor 2 (en otra terminal)
+npm run server:3002
+
+# Frontend (en otra terminal)
 npm run dev
-```
-
-3. O ejecuta ambos simultáneamente:
-```bash
-npm run dev:full
 ```
 
 Abre http://localhost:5173 en tu navegador y disfruta de la colaboración en tiempo real.

@@ -2,9 +2,22 @@ import { io } from "socket.io-client";
 import { EditorSynchronizer } from "./collaboration/EditorSynchronizer.js";
 
 class CollaborationManager {
-  constructor(editor, serverUrl = import.meta.env.VITE_SERVER_URL || "http://localhost:3001") {
+  constructor(editor, serverUrls = null) {
     this.editor = editor;
-    this.serverUrl = serverUrl;
+    
+    // Configurar múltiples servidores para failover
+    this.serverUrls = serverUrls || [
+      import.meta.env.VITE_SERVER_URL || "http://localhost:3001",
+      "http://localhost:3002"
+    ];
+    
+    // Si solo se pasó un string, convertir a array
+    if (typeof this.serverUrls === 'string') {
+      this.serverUrls = [this.serverUrls, "http://localhost:3002"];
+    }
+    
+    this.currentServerIndex = 0;
+    this.serverUrl = this.serverUrls[0];
     this.socket = null;
     this.currentRoom = null;
     this.isConnected = false;
@@ -14,26 +27,148 @@ class CollaborationManager {
     this.userName = localStorage.getItem("collaboration-username") || "Anónimo";
     this.repositionTimeout = null;
     this.editorSynchronizer = null;
+    
+    // Control de failover
+    this.failoverInProgress = false;
+    this.connectionAttempts = 0;
+    this.maxConnectionAttempts = 3;
+    this.connectionTimeout = 8000; // 8 segundos
+    
     this.init();
   }
 
   init() {
+    this.connectToServer();
+    this.setupResizeHandlers();
+  }
+
+  /**
+   * Conecta al servidor actual con failover automático
+   */
+  connectToServer() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+
+    this.serverUrl = this.serverUrls[this.currentServerIndex];
+    
+    console.log(`🔄 Conectando a servidor: ${this.serverUrl} (intento ${this.connectionAttempts + 1})`);
+    
     this.socket = io(this.serverUrl, {
-      timeout: 60000,
-      reconnection: true,
-      reconnectionDelay: 2000,
-      reconnectionDelayMax: 10000,
-      maxReconnectionAttempts: 10,
+      timeout: this.connectionTimeout,
+      reconnection: false, // Manejamos reconexión manualmente
       forceNew: true,
       upgrade: true,
       rememberUpgrade: true,
       transports: ["websocket", "polling"],
-      pingTimeout: 60000,
-      pingInterval: 25000,
+      pingTimeout: 30000,
+      pingInterval: 15000,
     });
 
     this.setupSocketListeners();
-    this.setupResizeHandlers();
+    this.setupFailoverHandling();
+    
+    // Timeout para conexión
+    const connectionTimer = setTimeout(() => {
+      if (!this.isConnected) {
+        console.warn(`⏰ Timeout conectando a ${this.serverUrl}`);
+        this.tryNextServer();
+      }
+    }, this.connectionTimeout);
+
+    // Limpiar timer al conectar
+    this.socket.once('connect', () => {
+      clearTimeout(connectionTimer);
+      this.connectionAttempts = 0;
+    });
+  }
+
+  /**
+   * Configurar manejo de failover
+   */
+  setupFailoverHandling() {
+    this.socket.on('connect_error', (error) => {
+      console.error(`❌ Error conectando a ${this.serverUrl}:`, error);
+      
+      // Verificar si es redirección por sticky routing
+      if (error.message && error.message.startsWith('REDIRECT:')) {
+        const redirectUrl = error.message.split('REDIRECT:')[1];
+        console.log(`🔄 Redirección sticky routing: ${redirectUrl}`);
+        this.handleStickyRedirect(redirectUrl);
+        return;
+      }
+      
+      this.tryNextServer();
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      this.isConnected = false;
+      console.warn(`🔌 Desconectado de ${this.serverUrl}. Razón: ${reason}`);
+      
+      if (reason === 'io server disconnect' || reason === 'transport close') {
+        this.tryNextServer();
+      }
+    });
+  }
+
+  /**
+   * Manejar redirección por sticky routing
+   */
+  handleStickyRedirect(redirectUrl) {
+    const serverIndex = this.serverUrls.indexOf(redirectUrl);
+    
+    if (serverIndex !== -1) {
+      console.log(`🎯 Cambiando a servidor correcto para roomId: ${redirectUrl}`);
+      this.currentServerIndex = serverIndex;
+      this.connectToServer();
+    } else {
+      console.warn(`⚠️  URL de redirección no válida: ${redirectUrl}`);
+      this.tryNextServer();
+    }
+  }
+
+  /**
+   * Intentar siguiente servidor en failover
+   */
+  tryNextServer() {
+    if (this.failoverInProgress) {
+      return;
+    }
+    
+    this.failoverInProgress = true;
+    this.connectionAttempts++;
+    
+    if (this.connectionAttempts >= this.maxConnectionAttempts) {
+      // Intentar siguiente servidor
+      this.currentServerIndex = (this.currentServerIndex + 1) % this.serverUrls.length;
+      this.connectionAttempts = 0;
+      
+      console.log(`🔄 Failover al servidor ${this.currentServerIndex + 1}: ${this.serverUrls[this.currentServerIndex]}`);
+    }
+    
+    // Reconectar después de un delay
+    setTimeout(() => {
+      this.failoverInProgress = false;
+      this.connectToServer();
+    }, 2000);
+  }
+
+  /**
+   * Calcular servidor óptimo por roomId para sticky routing
+   */
+  getServerForRoomId(roomId) {
+    if (!roomId) return this.serverUrls[0];
+    
+    // Hash simple para distribución consistente
+    let hash = 0;
+    for (let i = 0; i < roomId.length; i++) {
+      const char = roomId.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    const serverIndex = Math.abs(hash) % this.serverUrls.length;
+    return this.serverUrls[serverIndex];
   }
 
   /**
@@ -276,9 +411,56 @@ class CollaborationManager {
       return;
     }
 
+    // Verificar si necesitamos cambiar de servidor por sticky routing
+    const targetServerUrl = this.getServerForRoomId(roomId);
+    const currentServerUrl = this.serverUrls[this.currentServerIndex];
+    
+    if (targetServerUrl !== currentServerUrl) {
+      console.log(`🎯 Cambiando servidor para crear roomId ${roomId}: ${targetServerUrl}`);
+      
+      // Cambiar al servidor correcto
+      const targetServerIndex = this.serverUrls.indexOf(targetServerUrl);
+      if (targetServerIndex !== -1) {
+        this.currentServerIndex = targetServerIndex;
+        
+        // Preservar información de la sala para crear después
+        const createData = { roomId, password, userName: this.userName };
+        
+        this.showNotification(`Cambiando a servidor optimizado para crear la sala...`, "info");
+        
+        // Desconectar y reconectar al servidor correcto
+        this.socket.disconnect();
+        
+        setTimeout(() => {
+          this.connectToServer();
+          
+          // Una vez reconectado, crear la sala
+          const waitForConnection = () => {
+            if (this.isConnected) {
+              this._createRoomDirect(createData);
+            } else {
+              setTimeout(waitForConnection, 500);
+            }
+          };
+          
+          setTimeout(waitForConnection, 1000);
+        }, 500);
+        
+        return;
+      }
+    }
+
+    // Crear directamente si ya estamos en el servidor correcto
+    this._createRoomDirect({ roomId, password, userName: this.userName });
+  }
+
+  /**
+   * Método interno para crear una sala directamente
+   */
+  _createRoomDirect({ roomId, password, userName }) {
     this.socket.emit("create-room", {
       roomId: roomId,
-      userName: this.userName,
+      userName: userName,
       password: password,
     });
 
@@ -302,9 +484,56 @@ class CollaborationManager {
       return;
     }
 
+    // Verificar si necesitamos cambiar de servidor por sticky routing
+    const targetServerUrl = this.getServerForRoomId(roomId);
+    const currentServerUrl = this.serverUrls[this.currentServerIndex];
+    
+    if (targetServerUrl !== currentServerUrl) {
+      console.log(`🎯 Cambiando servidor para roomId ${roomId}: ${targetServerUrl}`);
+      
+      // Cambiar al servidor correcto
+      const targetServerIndex = this.serverUrls.indexOf(targetServerUrl);
+      if (targetServerIndex !== -1) {
+        this.currentServerIndex = targetServerIndex;
+        
+        // Preservar información de la sala para reconectar
+        const rejoinData = { roomId, password, userName: this.userName };
+        
+        this.showNotification(`Cambiando a servidor optimizado para la sala...`, "info");
+        
+        // Desconectar y reconectar al servidor correcto
+        this.socket.disconnect();
+        
+        setTimeout(() => {
+          this.connectToServer();
+          
+          // Una vez reconectado, unirse a la sala
+          const waitForConnection = () => {
+            if (this.isConnected) {
+              this._joinRoomDirect(rejoinData);
+            } else {
+              setTimeout(waitForConnection, 500);
+            }
+          };
+          
+          setTimeout(waitForConnection, 1000);
+        }, 500);
+        
+        return;
+      }
+    }
+
+    // Unirse directamente si ya estamos en el servidor correcto
+    this._joinRoomDirect({ roomId, password, userName: this.userName });
+  }
+
+  /**
+   * Método interno para unirse a una sala directamente
+   */
+  _joinRoomDirect({ roomId, password, userName }) {
     this.socket.emit("join-room", {
       roomId: roomId,
-      userName: this.userName,
+      userName: userName,
       password: password,
     });
 

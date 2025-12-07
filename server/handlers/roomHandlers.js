@@ -27,7 +27,7 @@ export function setupRoomHandlers(
   editorManager
 ) {
   // Crear sala con contraseña (solo para anfitriones)
-  socket.on("create-room", (data) => {
+  socket.on("create-room", async (data) => {
     logServerEvent("CREATE_ROOM_REQUEST", socket.id, { roomId: data.roomId });
 
     const validation = validateRoomCreationData(data);
@@ -47,7 +47,7 @@ export function setupRoomHandlers(
 
     try {
       // Verificar si la sala ya existe
-      if (roomManager.roomExists(roomId)) {
+      if (await roomManager.roomExists(roomId)) {
         socket.emit(
           "room-creation-failed",
           formatError("La sala ya existe", "ROOM_EXISTS", { roomId })
@@ -79,7 +79,7 @@ export function setupRoomHandlers(
       socket.emit("user-count", users.length);
 
       // Actualizar lista de salas para todos los clientes
-      setTimeout(() => broadcastRoomsList(io, roomManager), 100);
+      setTimeout(async () => await broadcastRoomsList(io, roomManager), 100);
 
       logServerEvent("ROOM_CREATED", socket.id, {
         roomId,
@@ -99,7 +99,7 @@ export function setupRoomHandlers(
   });
 
   // Unirse a una sala específica
-  socket.on("join-room", (data) => {
+  socket.on("join-room", async (data) => {
     const roomId = typeof data === "string" ? data : data.roomId;
     const userName = typeof data === "object" ? data.userName : "Anónimo";
     const password = typeof data === "object" ? data.password : null;
@@ -122,7 +122,7 @@ export function setupRoomHandlers(
 
     try {
       // Verificar si la sala existe
-      if (!roomManager.roomExists(roomId)) {
+      if (!await roomManager.roomExists(roomId)) {
         socket.emit(
           "join-room-failed",
           formatError("La sala no existe", "ROOM_NOT_FOUND", { roomId })
@@ -148,7 +148,7 @@ export function setupRoomHandlers(
       // Actualizar información del usuario
       userManager.updateUserRoom(socket.id, roomId, "guest");
 
-      const room = roomManager.getRoom(roomId);
+      const room = roomManager.getRoomSync(roomId);
       const hasEditor = editorManager.hasRoomEditor(roomId);
 
       // Confirmar que el usuario se unió exitosamente PRIMERO
@@ -204,7 +204,7 @@ export function setupRoomHandlers(
   });
 
   // Usuario sale de una sala voluntariamente
-  socket.on("leave-room", (roomId) => {
+  socket.on("leave-room", async (roomId) => {
     logServerEvent("LEAVE_ROOM_REQUEST", socket.id, { roomId });
 
     try {
@@ -218,7 +218,7 @@ export function setupRoomHandlers(
         socket.to(roomId).emit("user-left", {
           userId: socket.id,
           userName: userData.name,
-          userCount: roomManager.getRoom(roomId)?.users.size || 0,
+          userCount: roomManager.getRoomSync(roomId)?.users.size || 0,
         });
 
         // Actualizar información del usuario
@@ -228,8 +228,8 @@ export function setupRoomHandlers(
         socket.emit("left-room", { roomId, success: true });
 
         // Actualizar lista de salas si la sala fue eliminada
-        if (!roomManager.roomExists(roomId)) {
-          setTimeout(() => broadcastRoomsList(io, roomManager), 100);
+        if (!await roomManager.roomExists(roomId)) {
+          setTimeout(async () => await broadcastRoomsList(io, roomManager), 100);
         }
 
         logServerEvent("USER_LEFT_ROOM", socket.id, {
@@ -251,12 +251,12 @@ export function setupRoomHandlers(
   });
 
   // Eliminar sala (solo anfitrión)
-  socket.on("delete-room", (data) => {
+  socket.on("delete-room", async (data) => {
     const { roomId } = data;
     logServerEvent("DELETE_ROOM_REQUEST", socket.id, { roomId });
 
     try {
-      if (!roomManager.roomExists(roomId)) {
+      if (!await roomManager.roomExists(roomId)) {
         socket.emit(
           "delete-room-failed",
           formatError("La sala no existe", "ROOM_NOT_FOUND", { roomId })
@@ -275,7 +275,7 @@ export function setupRoomHandlers(
         return;
       }
 
-      const room = roomManager.getRoom(roomId);
+      const room = roomManager.getRoomSync(roomId);
       const hostName = room.users.get(socket.id)?.name || "Anfitrión";
 
       // Notificar a TODOS los usuarios de la sala
@@ -299,8 +299,8 @@ export function setupRoomHandlers(
       roomManager.deleteRoom(roomId);
 
       // Actualizar lista de salas inmediatamente y después de un delay
-      broadcastRoomsList(io, roomManager);
-      setTimeout(() => broadcastRoomsList(io, roomManager), 1000);
+      await broadcastRoomsList(io, roomManager);
+      setTimeout(async () => await broadcastRoomsList(io, roomManager), 1000);
 
       logServerEvent("ROOM_DELETED", socket.id, {
         roomId,
@@ -320,8 +320,8 @@ export function setupRoomHandlers(
   });
 
   // Obtener lista de salas activas
-  socket.on("get-rooms", () => {
+  socket.on("get-rooms", async () => {
     logServerEvent("GET_ROOMS_REQUEST", socket.id);
-    broadcastRoomsList(io, roomManager);
+    await broadcastRoomsList(io, roomManager);
   });
 }

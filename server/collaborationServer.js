@@ -17,13 +17,14 @@ import {
 /**
  * Configura el sistema de colaboración del servidor
  * @param {Object} io - Instancia de Socket.IO
+ * @param {RedisManager} redisManager - Instancia opcional de RedisManager
  * @returns {Object} Instancias de los gestores y funciones de utilidad
  */
-export function setupCollaborationServer(io) {
-  // Inicializar gestores
-  const roomManager = new RoomManager();
-  const userManager = new UserManager();
-  const editorManager = new EditorManager();
+export function setupCollaborationServer(io, redisManager = null) {
+  // Inicializar gestores con Redis support
+  const roomManager = new RoomManager(redisManager);
+  const userManager = new UserManager(redisManager);
+  const editorManager = new EditorManager(redisManager);
 
   logServerEvent("info", "Collaboration Server starting...", {
     modules: ["RoomManager", "UserManager", "EditorManager", "SocketHandlers"],
@@ -51,16 +52,27 @@ export function setupCollaborationServer(io) {
   });
 
   // Configurar limpieza automática de recursos (cada 5 minutos)
-  const cleanupInterval = setInterval(() => {
+  const cleanupInterval = setInterval(async () => {
     const report = cleanupServerResources(roomManager, userManager, io);
-    if (report.cleanedUsers > 0) {
+    
+    // Limpiar también salas inactivas de la lista global
+    if (redisManager) {
+      try {
+        const cleanedGlobalRooms = await redisManager.cleanupInactiveGlobalRooms();
+        report.cleanedGlobalRooms = cleanedGlobalRooms;
+      } catch (error) {
+        logServerEvent("GLOBAL_CLEANUP_ERROR", null, { error: error.message });
+      }
+    }
+    
+    if (report.cleanedUsers > 0 || report.cleanedGlobalRooms > 0) {
       logServerEvent("AUTO_CLEANUP", null, report);
     }
   }, 5 * 60 * 1000); // 5 minutos
 
   // Configurar broadcasting periódico de lista de salas (cada 30 segundos)
-  const broadcastInterval = setInterval(() => {
-    broadcastRoomsList(io, roomManager);
+  const broadcastInterval = setInterval(async () => {
+    await broadcastRoomsList(io, roomManager);
   }, 30 * 1000); // 30 segundos
 
   // Función para obtener estadísticas del servidor

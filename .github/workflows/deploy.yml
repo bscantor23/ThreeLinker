@@ -21,6 +21,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Docker permissions
+        run: |
+          # Add user to docker group
+          sudo usermod -aG docker $USER
+          # Change socket permissions
+          sudo chmod 666 /var/run/docker.sock
+          # Refresh group membership
+          newgrp docker
+          # Verify Docker access
+          docker --version
+          
       - name: Create environment file
         run: |
           echo "VITE_SERVER_URL=http://${{ vars.DOMAIN }}" > .env
@@ -35,7 +46,7 @@ jobs:
         env:
           VITE_SERVER_URL: ${{ vars.DOMAIN }}
         run: |
-          docker-compose build
+          docker-compose build --no-cache
           docker-compose up -d
           
       - name: Wait for services to start

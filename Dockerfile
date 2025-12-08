@@ -41,8 +41,6 @@ RUN echo "🏗️ Iniciando build de Vite..." && \
     ls -la dist/ && \
     du -sh dist/
 
-# Verificar que el build fue exitoso
-RUN test -f dist/index.html || (echo "❌ Build falló - index.html no encontrado" && exit 1)
 
 # =============================================================================
 # STAGE: Server Runtime

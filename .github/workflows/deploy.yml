@@ -107,22 +107,26 @@ jobs:
           CERTBOT_EMAIL: bscantor3@gmail.com
           DOMAIN: threelinker.genodev.com.co
         run: |
-          # Verificar que nginx esté funcionando antes de solicitar certificados
-          echo "🔍 Verificando que nginx esté accesible antes del challenge..."
-          timeout 30 bash -c 'until curl -f http://localhost/.well-known/acme-challenge/test 2>/dev/null; do sleep 2; done' || echo "⚠️  Nginx no está completamente listo, continuando..."
-          
-          # Solicita el certificado usando standalone mode (usa directamente el puerto 80 del host)
-          echo "🔐 Solicitando certificado SSL (standalone)..."
+          echo "🔐 Intentando obtener/renovar certificado SSL..."
           docker-compose stop nginx || true
           sleep 5
-          
+
+          set +e
           docker-compose run --rm --service-ports certbot \
             certonly --standalone \
             --email "$CERTBOT_EMAIL" \
             --agree-tos --no-eff-email \
             -d "$DOMAIN"
-          
-          echo "✅ Certificado solicitado, levantando de nuevo nginx..."
+          CERTBOT_EXIT=$?
+          set -e
+
+          if [ "$CERTBOT_EXIT" -ne 0 ]; then
+            echo "⚠️ Certbot falló (probablemente rate limit)."
+            echo "   Se usará el certificado existente en /etc/letsencrypt si está presente."
+          else
+            echo "✅ Certbot completado correctamente."
+          fi
+
           docker-compose start nginx
           sleep 10
 

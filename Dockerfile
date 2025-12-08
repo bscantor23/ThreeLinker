@@ -24,7 +24,7 @@ COPY package*.json ./
 FROM base AS frontend-builder
 
 # Instalar todas las dependencias (incluye devDependencies para Vite)
-RUN npm ci --verbose
+RUN npm ci --verbose || npm install --verbose
 
 # Copiar código fuente
 COPY . .
@@ -48,7 +48,7 @@ RUN echo "🏗️ Iniciando build de Vite..." && \
 FROM base AS server
 
 # Instalar solo dependencias de producción
-RUN npm ci --only=production --verbose && \
+RUN npm ci --only=production --verbose || npm install --only=production --verbose && \
     npm cache clean --force
 
 # Copiar código fuente del servidor

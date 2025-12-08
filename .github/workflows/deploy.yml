@@ -36,10 +36,16 @@ jobs:
           # Verify Docker access
           docker --version
           
-      - name: Create environment file
+      - name: Create environment file and ensure package-lock.json exists
         run: |
           echo "VITE_SERVER_URL=http://${{ vars.DOMAIN }}" > .env
           echo "PORT=3001" >> .env
+          
+          # Ensure package-lock.json exists and is valid
+          if [ ! -f package-lock.json ]; then
+            echo "📦 package-lock.json missing, generating..."
+            npm install
+          fi
           
       - name: Complete system cleanup before deploy
         run: |

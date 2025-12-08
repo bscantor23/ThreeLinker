@@ -7,9 +7,6 @@ x-logging: &default-logging
 networks:
   threelinker-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
 
 volumes:
   redis-data:
@@ -32,8 +29,7 @@ services:
     volumes:
       - redis-data:/data
     networks:
-      threelinker-network:
-        ipv4_address: 172.20.0.10
+      - threelinker-network
     command: >
       redis-server
       --appendonly yes
@@ -59,14 +55,14 @@ services:
     ports:
       - "5173:5173"
     networks:
-      threelinker-network:
-        ipv4_address: 172.20.0.15
+      - threelinker-network
     environment:
       - NODE_ENV=development
       - VITE_SERVER_URL=http://localhost
     volumes:
       - .:/app
       - /app/node_modules
+    command: ["npm", "run", "dev"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5173"]
       interval: 30s
@@ -94,7 +90,7 @@ services:
       - ./nginx/certbot-www:/var/www/certbot
     environment:
       - INSTANCE_ID=server-1
-      - REDIS_HOST=172.20.0.10
+      - REDIS_HOST=threelinker-redis
       - REDIS_PORT=6379
       - REDIS_DB=0
       - NODE_ENV=production
@@ -124,21 +120,19 @@ services:
     # volumes:
       # - ./server:/app/server
     networks:
-      threelinker-network:
-        ipv4_address: 172.20.0.21
+      - threelinker-network
     environment:
       - PORT=3002
       - INSTANCE_ID=server-2
-      - REDIS_HOST=172.20.0.10
+      - REDIS_HOST=threelinker-redis
       - REDIS_PORT=6379
       - REDIS_DB=0
       - NODE_ENV=production
       - DEBUG=collaboration:*
     depends_on:
       redis:
-        condition: service_healthy
-    command: ["node", "server.js"]
-    healthcheck:
+      networks:
+        - threelinker-network
       test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
       interval: 30s
       timeout: 10s
@@ -159,8 +153,7 @@ services:
       - nginx-cache:/tmp/nginx_cache
       - ./nginx/logs:/var/log/nginx
     networks:
-      threelinker-network:
-        ipv4_address: 172.20.0.30
+      - threelinker-network
     depends_on:
       - frontend
       - threelinker-server-1
@@ -183,5 +176,4 @@ services:
       - certbot-var:/var/lib/letsencrypt
       - ./nginx/certbot-www:/var/www/certbot
     networks:
-      threelinker-network:
-        ipv4_address: 172.20.0.40
+      - threelinker-network

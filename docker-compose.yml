@@ -16,10 +16,10 @@ volumes:
     driver: local
   nginx-cache:
     driver: local
-    certbot-etc:
-      driver: local
-    certbot-var:
-      driver: local
+  certbot-etc:
+    driver: local
+  certbot-var:
+    driver: local
 
 services:
   # Redis - Shared State Store

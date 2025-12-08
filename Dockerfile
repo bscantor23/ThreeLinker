@@ -19,6 +19,23 @@ WORKDIR /app
 COPY package*.json ./
 
 # =============================================================================
+# STAGE: Development (Vite dev server)
+# =============================================================================
+FROM base AS development
+
+# Instalar TODAS las dependencias (incluye devDependencies para Vite)
+RUN npm ci --verbose || npm install --verbose
+
+# Copiar todo el código fuente
+COPY . .
+
+# Vite por defecto usa 5173
+EXPOSE 5173
+
+# Comando por defecto: servidor de desarrollo
+CMD ["npm", "run", "dev"]
+
+# =============================================================================
 # STAGE: Frontend Builder
 # =============================================================================
 FROM base AS frontend-builder
@@ -40,7 +57,6 @@ RUN echo "🏗️ Iniciando build de Vite..." && \
     echo "📊 Estadísticas del build:" && \
     ls -la dist/ && \
     du -sh dist/
-
 
 # =============================================================================
 # STAGE: Server Runtime

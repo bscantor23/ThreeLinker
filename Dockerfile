@@ -99,25 +99,3 @@ USER threelinker
 
 # Comando para mantener el contenedor activo y servir archivos
 CMD ["sh", "-c", "echo '📦 Frontend build listo para nginx' && tail -f /dev/null"]
-
-# =============================================================================
-# STAGE: Development (modo completo con servidor + frontend)
-# =============================================================================
-FROM base AS development
-
-# Instalar todas las dependencias (incluye devDependencies)
-RUN npm install
-
-# Copiar todo el código fuente
-COPY . .
-
-# Variables de entorno para desarrollo
-ARG VITE_SERVER_URL=http://localhost:3001
-ENV VITE_SERVER_URL=${VITE_SERVER_URL}
-ENV NODE_ENV=development
-
-# Exponer puertos para desarrollo
-EXPOSE 3001 5173
-
-# Ejecutar en modo desarrollo con concurrently
-CMD ["npm", "run", "dev:full"]

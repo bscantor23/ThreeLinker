@@ -41,11 +41,19 @@ class CollaborationManager {
     this.repositionTimeout = null;
     this.editorSynchronizer = null;
 
-    // Control de failover
+    // Control de failover mejorado
     this.failoverInProgress = false;
     this.connectionAttempts = 0;
     this.maxConnectionAttempts = 3;
     this.connectionTimeout = 8000; // 8 segundos
+
+    // Cache y listado unificado de salas
+    this.allRoomsCache = new Map();
+    this.roomsCacheTimeout = 30000; // 30 segundos
+    this.lastRoomsUpdate = 0;
+    this.isLoadingRooms = false;
+    this.serverLatencies = new Map();
+    this.unifiedRooms = []; // Lista unificada de salas de todos los servidores
 
     this.init();
   }
@@ -53,6 +61,357 @@ class CollaborationManager {
   init() {
     this.connectToServer();
     this.setupResizeHandlers();
+    this.setupUnifiedRoomsUpdater();
+    this.setupLatencyMonitoring();
+  }
+
+  /**
+   * Configura la medición automática de latencias
+   */
+  setupLatencyMonitoring() {
+    // Medir latencias cada 60 segundos
+    setInterval(async () => {
+      if (this.isConnected) {
+        await this.measureServerLatencies();
+      }
+    }, 60000);
+
+    // Primera medición después de conectar
+    setTimeout(async () => {
+      if (this.isConnected) {
+        await this.measureServerLatencies();
+      }
+    }, 2000);
+  }
+
+  /**
+   * Configura la actualización automática de salas unificadas
+   */
+  setupUnifiedRoomsUpdater() {
+    // Actualizar salas unificadas cada 30 segundos
+    setInterval(() => {
+      if (!this.isLoadingRooms) {
+        this.fetchUnifiedRooms();
+      }
+    }, 30000);
+
+    // Primera actualización después de conectar
+    setTimeout(() => {
+      if (this.isConnected) {
+        this.fetchUnifiedRooms();
+      }
+    }, 1000);
+  }
+
+  /**
+   * Obtiene las salas unificadas de todos los servidores con cache inteligente
+   */
+  async fetchUnifiedRooms() {
+    if (this.isLoadingRooms) return this.unifiedRooms;
+    
+    // Verificar cache
+    const now = Date.now();
+    if (now - this.lastRoomsUpdate < this.roomsCacheTimeout && this.unifiedRooms.length > 0) {
+      return this.unifiedRooms;
+    }
+
+    this.isLoadingRooms = true;
+    this.showNotification("🔄 Actualizando lista de salas...", "info");
+
+    try {
+      // Obtener salas desde el servidor actual (que debe tener acceso a todas via Redis)
+      const roomsResponse = await this.fetchFromEndpoint('/api/all-rooms');
+      
+      if (roomsResponse && roomsResponse.success) {
+        this.unifiedRooms = roomsResponse.rooms || [];
+        this.lastRoomsUpdate = now;
+        
+        // Actualizar cache y UI
+        this.updateRoomsCache();
+        this.updateAvailableRooms(this.unifiedRooms);
+        
+        this.showNotification(`✅ ${this.unifiedRooms.length} salas disponibles`, "success");
+        console.log(`📋 Salas obtenidas:`, this.unifiedRooms);
+        
+        return this.unifiedRooms;
+      }
+    } catch (error) {
+      console.error('Error obteniendo salas unificadas:', error);
+      this.showNotification("⚠️ Error actualizando salas", "warning");
+    } finally {
+      this.isLoadingRooms = false;
+    }
+    
+    return this.unifiedRooms;
+  }
+
+  /**
+   * Hace request a un endpoint específico del servidor actual
+   */
+  async fetchFromEndpoint(endpoint) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout'));
+      }, 5000);
+
+      fetch(`${this.serverUrl}${endpoint}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+      .then(response => response.json())
+      .then(data => {
+        clearTimeout(timeout);
+        resolve(data);
+      })
+      .catch(error => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * Actualiza el cache local de salas
+   */
+  updateRoomsCache() {
+    this.unifiedRooms.forEach(room => {
+      this.allRoomsCache.set(room.id, {
+        ...room,
+        cachedAt: Date.now(),
+        serverLatency: this.serverLatencies.get(room.serverInstance) || 0
+      });
+    });
+  }
+
+  /**
+   * Mide la latencia de los servidores
+   */
+  async measureServerLatencies() {
+    const promises = this.serverUrls.map(async (serverUrl, index) => {
+      try {
+        const start = Date.now();
+        await this.fetchFromServer(serverUrl, '/api/health');
+        const latency = Date.now() - start;
+        this.serverLatencies.set(`server-${index + 1}`, latency);
+        return { server: `server-${index + 1}`, latency };
+      } catch (error) {
+        this.serverLatencies.set(`server-${index + 1}`, -1);
+        return { server: `server-${index + 1}`, latency: -1 };
+      }
+    });
+
+    const results = await Promise.all(promises);
+    console.log('📊 Latencias de servidores:', results);
+    return results;
+  }
+
+  /**
+   * Hace request a un servidor específico
+   */
+  async fetchFromServer(serverUrl, endpoint) {
+    const response = await fetch(`${serverUrl}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Obtiene servidor óptimo para una sala específica
+   */
+  getOptimalServerForRoom(roomId) {
+    if (!roomId) return this.serverUrls[0];
+
+    // Usar hash consistente para sticky routing
+    let hash = 0;
+    for (let i = 0; i < roomId.length; i++) {
+      const char = roomId.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+    
+    const serverIndex = Math.abs(hash) % this.serverUrls.length;
+    return this.serverUrls[serverIndex];
+  }
+
+  /**
+   * Método mejorado para crear sala con failover transparente
+   */
+  createRoom(roomId, password = null) {
+    if (!this.isConnected) {
+      this.showNotification("No conectado al servidor", "error");
+      return;
+    }
+
+    if (this.currentRoom) {
+      this.showNotification(
+        `Ya te encuentras vinculado en la sala "${this.currentRoom}".`,
+        "error"
+      );
+      return;
+    }
+
+    // Mostrar mensaje informativo durante la transición
+    this.showLoadingMessage("🌟 Creando sala con servidor optimizado...");
+
+    // Determinar servidor óptimo para la sala
+    const optimalServerUrl = this.getOptimalServerForRoom(roomId);
+    const currentServerUrl = this.serverUrls[this.currentServerIndex];
+
+    if (optimalServerUrl !== currentServerUrl) {
+      console.log(`🎯 Cambiando a servidor óptimo para crear sala ${roomId}: ${optimalServerUrl}`);
+      
+      // Cambiar al servidor óptimo
+      const targetServerIndex = this.serverUrls.indexOf(optimalServerUrl);
+      if (targetServerIndex !== -1) {
+        this.currentServerIndex = targetServerIndex;
+        this.performServerSwitch(optimalServerUrl, () => {
+          this._createRoomDirect({ roomId, password, userName: this.userName });
+        });
+        return;
+      }
+    }
+
+    // Crear directamente en el servidor actual
+    this._createRoomDirect({ roomId, password, userName: this.userName });
+  }
+
+  /**
+   * Método mejorado para unirse a sala con failover transparente
+   */
+  joinRoom(roomId, password = null) {
+    if (!this.isConnected) {
+      this.showNotification("No conectado al servidor", "error");
+      return;
+    }
+
+    if (this.currentRoom) {
+      const action = this.isHost ? "elimina" : "sal de";
+      this.showNotification(
+        `Ya estás en la sala "${this.currentRoom}". ${
+          action.charAt(0).toUpperCase() + action.slice(1)
+        } la sala actual primero.`,
+        "error"
+      );
+      return;
+    }
+
+    // Mostrar mensaje informativo durante la transición
+    this.showLoadingMessage("🔗 Conectando a sala con servidor optimizado...");
+
+    // Determinar servidor óptimo para la sala
+    const optimalServerUrl = this.getOptimalServerForRoom(roomId);
+    const currentServerUrl = this.serverUrls[this.currentServerIndex];
+
+    if (optimalServerUrl !== currentServerUrl) {
+      console.log(`🎯 Cambiando a servidor óptimo para sala ${roomId}: ${optimalServerUrl}`);
+      
+      // Cambiar al servidor óptimo
+      const targetServerIndex = this.serverUrls.indexOf(optimalServerUrl);
+      if (targetServerIndex !== -1) {
+        this.currentServerIndex = targetServerIndex;
+        this.performServerSwitch(optimalServerUrl, () => {
+          this._joinRoomDirect({ roomId, password, userName: this.userName });
+        });
+        return;
+      }
+    }
+
+    // Unirse directamente en el servidor actual
+    this._joinRoomDirect({ roomId, password, userName: this.userName });
+  }
+
+  /**
+   * Realiza cambio de servidor con UX mejorada
+   */
+  performServerSwitch(newServerUrl, callback) {
+    // Preservar estado actual
+    const preservedState = {
+      currentRoom: this.currentRoom,
+      isHost: this.isHost,
+      userName: this.userName
+    };
+
+    // Mostrar notificación de cambio
+    this.showNotification(`🔄 Cambiando a servidor optimizado...`, "info");
+
+    // Desconectar del servidor actual
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+
+    // Reconectar al nuevo servidor
+    setTimeout(() => {
+      this.serverUrl = newServerUrl;
+      this.connectToServer();
+
+      // Una vez conectado, ejecutar callback
+      const waitForConnection = () => {
+        if (this.isConnected) {
+          this.showNotification(`✅ Conectado a servidor optimizado`, "success");
+          callback();
+        } else {
+          setTimeout(waitForConnection, 500);
+        }
+      };
+
+      setTimeout(waitForConnection, 1000);
+    }, 500);
+  }
+
+  /**
+   * Muestra mensaje de carga informativo
+   */
+  showLoadingMessage(message) {
+    this.showNotification(message, "info");
+  }
+
+  /**
+   * Método sobrescrito para obtener salas con cache
+   */
+  getRooms() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Intentar obtener salas unificadas primero
+        const rooms = await this.fetchUnifiedRooms();
+        if (rooms && rooms.length > 0) {
+          resolve(rooms);
+          return;
+        }
+      } catch (error) {
+        console.warn('Error obteniendo salas unificadas, usando fallback:', error);
+      }
+
+      // Fallback al método original
+      if (!this.isConnected) {
+        reject(new Error("No conectado al servidor"));
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        reject(new Error("Timeout al obtener salas"));
+      }, 5000);
+
+      const handleRoomsResponse = (data) => {
+        clearTimeout(timeout);
+        this.socket.off("rooms-list", handleRoomsResponse);
+        resolve(data);
+      };
+
+      this.socket.once("rooms-list", handleRoomsResponse);
+      this.socket.emit("get-rooms");
+    });
   }
 
   /**
@@ -359,7 +718,15 @@ class CollaborationManager {
     });
 
     this.socket.on("rooms-list", (rooms) => {
-      globalThis.collaborationPanel?.updateAvailableRooms?.(rooms);
+      // Combinar salas del socket con salas unificadas cacheadas
+      const combinedRooms = this.combineSocketRoomsWithUnified(rooms);
+      globalThis.collaborationPanel?.updateAvailableRooms?.(combinedRooms);
+    });
+
+    // Evento para salas unificadas
+    this.socket.on("unified-rooms-list", (rooms) => {
+      this.unifiedRooms = rooms;
+      this.updateAvailableRooms(rooms);
     });
   }
 
@@ -847,6 +1214,137 @@ class CollaborationManager {
       );
       globalThis.collaborationPanel.updateCurrentRoom(this.currentRoom);
     }
+  }
+
+  /**
+   * Combina salas del socket con salas unificadas cacheadas
+   */
+  combineSocketRoomsWithUnified(socketRooms) {
+    if (!socketRooms || !Array.isArray(socketRooms)) {
+      return this.unifiedRooms;
+    }
+
+    // Crear mapa de salas unificadas por ID
+    const unifiedMap = new Map();
+    this.unifiedRooms.forEach(room => {
+      unifiedMap.set(room.id, room);
+    });
+
+    // Combinar con salas del socket actual
+    socketRooms.forEach(socketRoom => {
+      const existingRoom = unifiedMap.get(socketRoom.id);
+      if (existingRoom) {
+        // Actualizar información si es necesario
+        unifiedMap.set(socketRoom.id, {
+          ...existingRoom,
+          ...socketRoom,
+          isCurrentServer: true // Marcar como del servidor actual
+        });
+      } else {
+        // Agregar sala nueva del socket
+        unifiedMap.set(socketRoom.id, {
+          ...socketRoom,
+          serverInstance: 'current',
+          serverUrl: this.serverUrl,
+          isCurrentServer: true
+        });
+      }
+    });
+
+    return Array.from(unifiedMap.values()).sort((a, b) => b.lastActivity - a.lastActivity);
+  }
+
+  /**
+   * Actualiza la lista de salas disponibles en la UI con información del servidor
+   */
+  updateAvailableRooms(rooms) {
+    if (!rooms || !Array.isArray(rooms)) return;
+
+    // Enriquecer salas con información visual del servidor
+    const enrichedRooms = rooms.map(room => ({
+      ...room,
+      serverBadge: this.getServerBadge(room.serverInstance),
+      serverColor: this.getServerColor(room.serverInstance),
+      serverLatency: this.serverLatencies.get(room.serverInstance) || 0,
+      isOptimal: this.isOptimalServerForRoom(room.id),
+      displayInfo: this.getRoomDisplayInfo(room)
+    }));
+
+    // Actualizar UI
+    globalThis.collaborationPanel?.updateAvailableRooms?.(enrichedRooms);
+    
+    console.log('🏠 Salas actualizadas en UI:', enrichedRooms);
+  }
+
+  /**
+   * Obtiene badge visual para el servidor
+   */
+  getServerBadge(serverInstance) {
+    const currentInstance = this.getCurrentServerInstance();
+    
+    if (serverInstance === currentInstance) {
+      return '🟢 Local';
+    } else if (serverInstance && serverInstance !== 'local') {
+      return '🔵 Remoto';
+    } else {
+      return '⚪ Desconocido';
+    }
+  }
+
+  /**
+   * Obtiene color para el servidor
+   */
+  getServerColor(serverInstance) {
+    const currentInstance = this.getCurrentServerInstance();
+    
+    if (serverInstance === currentInstance) {
+      return '#28a745'; // Verde para servidor actual
+    } else if (serverInstance && serverInstance !== 'local') {
+      return '#007bff'; // Azul para servidor remoto
+    } else {
+      return '#6c757d'; // Gris para desconocido
+    }
+  }
+
+  /**
+   * Obtiene la instancia del servidor actual
+   */
+  getCurrentServerInstance() {
+    const port = this.serverUrl.includes('3001') ? 'server-1' : 
+                 this.serverUrl.includes('3002') ? 'server-2' : 'current';
+    return port;
+  }
+
+  /**
+   * Verifica si el servidor actual es óptimo para la sala
+   */
+  isOptimalServerForRoom(roomId) {
+    const optimalServer = this.getOptimalServerForRoom(roomId);
+    return optimalServer === this.serverUrl;
+  }
+
+  /**
+   * Obtiene información de display para la sala
+   */
+  getRoomDisplayInfo(room) {
+    const latency = this.serverLatencies.get(room.serverInstance);
+    const isOptimal = this.isOptimalServerForRoom(room.id);
+    
+    let info = [];
+    
+    if (latency !== undefined && latency > 0) {
+      info.push(`${latency}ms`);
+    }
+    
+    if (isOptimal) {
+      info.push('⚡ Óptimo');
+    }
+    
+    if (room.userCount > 0) {
+      info.push(`${room.userCount}👥`);
+    }
+    
+    return info.join(' • ');
   }
 
   /**

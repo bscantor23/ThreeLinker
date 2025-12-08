@@ -735,3 +735,340 @@
   background: #ff3742;
   transform: translateY(-1px);
 }
+
+/* ========================================
+   INDICADORES VISUALES DE SERVIDOR
+   ======================================== */
+
+/* Badges de servidor */
+.server-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.server-badge.local {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+  border: 1px solid rgba(40, 167, 69, 0.3);
+}
+
+.server-badge.remote {
+  background: rgba(0, 123, 255, 0.2);
+  color: #007bff;
+  border: 1px solid rgba(0, 123, 255, 0.3);
+}
+
+.server-badge.unknown {
+  background: rgba(108, 117, 125, 0.2);
+  color: #6c757d;
+  border: 1px solid rgba(108, 117, 125, 0.3);
+}
+
+/* Sala items con información de servidor */
+.room-item {
+  position: relative;
+  padding: 8px;
+}
+
+.room-item .room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.room-item .room-id {
+  font-weight: bold;
+  font-size: 12px;
+  color: #ffffff;
+  margin-bottom: 0;
+}
+
+.room-item .server-badge {
+  margin-left: 8px;
+}
+
+.room-item .room-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #999;
+}
+
+.room-item .room-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Colores distintivos por servidor */
+.room-item.server-local {
+  border-left: 3px solid #28a745;
+  background: rgba(40, 167, 69, 0.05);
+}
+
+.room-item.server-remote {
+  border-left: 3px solid #007bff;
+  background: rgba(0, 123, 255, 0.05);
+}
+
+.room-item.server-current {
+  border-left: 3px solid #28a745;
+  background: rgba(40, 167, 69, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(40, 167, 69, 0.2);
+}
+
+/* Estados de optimización */
+.room-item.optimal-server {
+  position: relative;
+}
+
+.room-item.optimal-server::before {
+  content: '⚡';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 10px;
+  color: #ffc107;
+  animation: twinkle 2s infinite;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Indicadores de latencia */
+.latency-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #ccc;
+}
+
+.latency-indicator.excellent {
+  color: #28a745;
+  background: rgba(40, 167, 69, 0.1);
+}
+
+.latency-indicator.good {
+  color: #17a2b8;
+  background: rgba(23, 162, 184, 0.1);
+}
+
+.latency-indicator.fair {
+  color: #ffc107;
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.latency-indicator.poor {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.latency-indicator.offline {
+  color: #6c757d;
+  background: rgba(108, 117, 125, 0.1);
+}
+
+/* Información adicional de sala */
+.room-display-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 9px;
+  color: #888;
+  flex-wrap: wrap;
+}
+
+.room-display-info .info-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Estados de carga y sincronización */
+.syncing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #17a2b8;
+}
+
+.syncing-indicator::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(23, 162, 184, 0.3);
+  border-top: 2px solid #17a2b8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.sync-status.synced {
+  color: #28a745;
+  background: rgba(40, 167, 69, 0.1);
+}
+
+.sync-status.syncing {
+  color: #17a2b8;
+  background: rgba(23, 162, 184, 0.1);
+}
+
+.sync-status.error {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+/* Loading states mejorados */
+.loading-rooms {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #999;
+  font-size: 12px;
+}
+
+.loading-rooms::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border: 2px solid rgba(153, 153, 153, 0.3);
+  border-top: 2px solid #999;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Estados de transición de servidor */
+.server-transition {
+  position: relative;
+  overflow: hidden;
+}
+
+.server-transition::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Indicador de failover en progreso */
+.failover-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 20px 30px;
+  border-radius: 8px;
+  z-index: 100002;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  backdrop-filter: blur(10px);
+  animation: fadeInScale 0.3s ease-out;
+}
+
+.failover-indicator::before {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Tooltips para información de servidor */
+.server-tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.server-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 5px;
+  backdrop-filter: blur(5px);
+}
+
+.server-tooltip:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+  margin-bottom: 0;
+  z-index: 1000;
+}

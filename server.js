@@ -175,6 +175,35 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+// Endpoint para obtener todas las salas de todos los servidores
+app.get('/api/all-rooms', async (req, res) => {
+  try {
+    const activeRooms = await roomManager.getActiveRooms();
+    const serverInfo = {
+      currentInstance: instanceConfig.INSTANCE_ID,
+      currentPort: instanceConfig.PORT,
+      servers: LOAD_BALANCER_CONFIG.SERVERS,
+      algorithm: 'roomId hash'
+    };
+    
+    res.json({
+      success: true,
+      rooms: activeRooms,
+      serverInfo,
+      timestamp: Date.now(),
+      totalRooms: activeRooms.length
+    });
+  } catch (error) {
+    console.error('Error obteniendo todas las salas:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener salas de todos los servidores',
+      details: error.message,
+      timestamp: Date.now()
+    });
+  }
+});
+
 // Endpoint para obtener configuración de load balancer
 app.get('/api/load-balancer', (req, res) => {
   res.json({

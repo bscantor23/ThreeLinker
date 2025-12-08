@@ -325,7 +325,7 @@ class RoomManager {
 
   /**
    * Obtiene la lista de todas las salas activas (de TODOS los servidores)
-   * @returns {Array} Lista de salas ordenadas por actividad
+   * @returns {Array} Lista de salas ordenadas por actividad con información del servidor
    */
   async getActiveRooms() {
     try {
@@ -333,7 +333,17 @@ class RoomManager {
       const globalRooms = await this.redis.getAllGlobalRooms();
       
       if (globalRooms && globalRooms.length > 0) {
-        return globalRooms;
+        // Enriquecer con información del servidor y estado de conexión
+        const enrichedRooms = globalRooms.map(room => ({
+          ...room,
+          serverUrl: this.getServerUrlForRoom(room.id),
+          isAvailable: this.isServerHealthy(room.serverInstance),
+          serverStatus: this.getServerStatus(room.serverInstance),
+          timeSinceActivity: Date.now() - (room.lastActivity || Date.now()),
+          displayName: this.generateDisplayName(room.id, room.serverInstance)
+        }));
+        
+        return enrichedRooms.sort((a, b) => b.lastActivity - a.lastActivity);
       }
     } catch (error) {
       logServerEvent('GET_GLOBAL_ROOMS_ERROR', null, { 
@@ -352,12 +362,92 @@ class RoomManager {
         createdAt: data.createdAt || Date.now(),
         isProtected: data.isProtected || false,
         host: data.host,
-        serverInstance: process.env.INSTANCE_ID || 'local'
+        serverInstance: process.env.INSTANCE_ID || 'local',
+        serverUrl: this.getServerUrlForRoom(roomId),
+        isAvailable: true,
+        serverStatus: 'available',
+        timeSinceActivity: Date.now() - (data.lastActivity || Date.now()),
+        displayName: this.generateDisplayName(roomId, process.env.INSTANCE_ID || 'local')
       })
     );
 
     // Ordenar por actividad más reciente
     return activeRooms.sort((a, b) => b.lastActivity - a.lastActivity);
+  }
+
+  /**
+   * Obtiene la URL del servidor para una sala específica
+   * @param {string} roomId - ID de la sala
+   * @returns {string} URL del servidor
+   */
+  getServerUrlForRoom(roomId) {
+    if (!roomId) return this.getDefaultServerUrl();
+    
+    // Determinar servidor basado en roomId hash (sticky routing)
+    let hash = 0;
+    for (let i = 0; i < roomId.length; i++) {
+      const char = roomId.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    const serverIndex = Math.abs(hash) % 2; // Asumiendo 2 servidores
+    const isLocal = process.env.NODE_ENV === 'development';
+    
+    if (isLocal) {
+      return serverIndex === 0 ? 'http://localhost:3001' : 'http://localhost:3002';
+    } else {
+      const baseUrl = process.env.BASE_URL || 'https://threelinker.genodev.com.co';
+      return baseUrl; // En producción, ambos servidores comparten el mismo dominio
+    }
+  }
+
+  /**
+   * Obtiene la URL por defecto del servidor actual
+   * @returns {string} URL del servidor actual
+   */
+  getDefaultServerUrl() {
+    const isLocal = process.env.NODE_ENV === 'development';
+    const port = process.env.PORT || 3001;
+    
+    if (isLocal) {
+      return `http://localhost:${port}`;
+    } else {
+      return process.env.BASE_URL || 'https://threelinker.genodev.com.co';
+    }
+  }
+
+  /**
+   * Verifica si un servidor está saludable (placeholder para implementación futura)
+   * @param {string} serverInstance - ID del servidor
+   * @returns {boolean} Estado de salud del servidor
+   */
+  isServerHealthy(serverInstance) {
+    // TODO: Implementar health checks reales para cada servidor
+    // Por ahora, asumimos que todos los servidores están disponibles
+    return true;
+  }
+
+  /**
+   * Obtiene el estado del servidor
+   * @param {string} serverInstance - ID del servidor
+   * @returns {string} Estado del servidor
+   */
+  getServerStatus(serverInstance) {
+    const currentInstance = process.env.INSTANCE_ID || 'local';
+    return serverInstance === currentInstance ? 'current' : 'available';
+  }
+
+  /**
+   * Genera un nombre para mostrar de la sala con información del servidor
+   * @param {string} roomId - ID de la sala
+   * @param {string} serverInstance - ID del servidor
+   * @returns {string} Nombre para mostrar
+   */
+  generateDisplayName(roomId, serverInstance) {
+    const currentInstance = process.env.INSTANCE_ID || 'local';
+    const serverSuffix = serverInstance === currentInstance ? '' : ` (${serverInstance})`;
+    return `${roomId}${serverSuffix}`;
   }
 
   /**

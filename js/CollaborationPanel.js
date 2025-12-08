@@ -570,7 +570,7 @@ function updateAvailableRooms(
 }
 
 /**
- * Crea un elemento de sala en la lista
+ * Crea un elemento de sala en la lista con información de servidor
  */
 function createRoomItem(room, collaborationManager, roomInput) {
   const roomItem = document.createElement("div");
@@ -580,17 +580,63 @@ function createRoomItem(room, collaborationManager, roomInput) {
   const roomId = room.id || room.name || room || "Sala desconocida";
   roomItem.dataset.roomId = roomId;
 
+  // Determinar clase CSS basada en servidor
+  if (room.serverInstance) {
+    const currentServer = collaborationManager.getCurrentServerInstance();
+    if (room.serverInstance === currentServer) {
+      roomItem.classList.add("server-current");
+    } else if (room.serverInstance === 'server-1' || room.serverInstance === 'server-2') {
+      roomItem.classList.add(`server-${room.serverInstance.includes('server-') ? room.serverInstance.split('-')[1] : 'remote'}`);
+    }
+  }
+
+  // Marcar como servidor óptimo si aplica
+  if (room.isOptimal) {
+    roomItem.classList.add("optimal-server");
+  }
+
+  // Header de la sala
+  const roomHeader = document.createElement("div");
+  roomHeader.className = "room-header";
+
+  // ID de la sala con badge de servidor
+  const roomIdElement = document.createElement("div");
+  roomIdElement.className = `room-id ${room.isProtected ? "protected" : ""}`;
+  
+  // Agregar badge de servidor si está disponible
+  if (room.serverBadge) {
+    const serverBadge = document.createElement("span");
+    serverBadge.className = `server-badge ${room.serverBadge.toLowerCase().replace(' ', '-')}`;
+    serverBadge.textContent = room.serverBadge;
+    serverBadge.title = `Sala en ${room.serverInstance || 'servidor desconocido'}`;
+    roomIdElement.appendChild(document.createTextNode(roomId + (room.isProtected ? " 🔒" : "")));
+    roomIdElement.appendChild(serverBadge);
+  } else {
+    roomIdElement.textContent = roomId + (room.isProtected ? " 🔒" : "");
+  }
+  
+  roomHeader.appendChild(roomIdElement);
+
+  // Indicador de latencia si está disponible
+  if (room.serverLatency !== undefined && room.serverLatency > 0) {
+    const latencyIndicator = document.createElement("span");
+    const latencyClass = room.serverLatency < 50 ? "excellent" : 
+                        room.serverLatency < 100 ? "good" : 
+                        room.serverLatency < 200 ? "fair" : "poor";
+    latencyIndicator.className = `latency-indicator ${latencyClass}`;
+    latencyIndicator.textContent = `${room.serverLatency}ms`;
+    latencyIndicator.title = `Latencia al servidor: ${room.serverLatency}ms`;
+    roomHeader.appendChild(latencyIndicator);
+  }
+
+  roomItem.appendChild(roomHeader);
+
   // Información de la sala
   const roomInfo = document.createElement("div");
   roomInfo.className = "room-info";
 
   const userCount = room.userCount || room.users || 0;
   const isProtected = room.isProtected || false;
-
-  const roomIdElement = document.createElement("div");
-  roomIdElement.className = `room-id ${isProtected ? "protected" : ""}`;
-  roomIdElement.textContent = roomId + (isProtected ? " 🔒" : "");
-  roomInfo.appendChild(roomIdElement);
 
   const roomStats = document.createElement("div");
   roomStats.className = "room-stats";
@@ -600,15 +646,36 @@ function createRoomItem(room, collaborationManager, roomInput) {
   }${protectionText}`;
   roomInfo.appendChild(roomStats);
 
+  // Información adicional de display si está disponible
+  if (room.displayInfo) {
+    const displayInfo = document.createElement("div");
+    displayInfo.className = "room-display-info";
+    displayInfo.innerHTML = room.displayInfo;
+    roomInfo.appendChild(displayInfo);
+  }
+
   roomItem.appendChild(roomInfo);
 
-  // Indicador de estado
+  // Indicador de estado (editor/sala vacía)
   const statusIndicator = document.createElement("div");
   statusIndicator.className = `room-status-indicator ${
     room.hasEditor ? "has-editor" : ""
   }`;
   statusIndicator.title = room.hasEditor ? "Tiene editor" : "Sala vacía";
   roomItem.appendChild(statusIndicator);
+
+  // Tooltip con información detallada del servidor
+  if (room.serverInstance) {
+    let tooltipText = `Servidor: ${room.serverInstance}`;
+    if (room.serverLatency !== undefined) {
+      tooltipText += ` • Latencia: ${room.serverLatency}ms`;
+    }
+    if (room.isOptimal) {
+      tooltipText += " • Servidor óptimo";
+    }
+    roomItem.classList.add("server-tooltip");
+    roomItem.setAttribute("data-tooltip", tooltipText);
+  }
 
   // Evento de click
   roomItem.addEventListener("click", () =>

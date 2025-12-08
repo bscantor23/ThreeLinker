@@ -57,7 +57,7 @@ jobs:
 
       - name: Obtener/renovar certificado SSL con Certbot
         env:
-          CERTBOT_EMAIL: tucorreo@dominio.com
+          CERTBOT_EMAIL: bscantor3@gmail.com
           DOMAIN: threelinker.genodev.com.co
         run: |
           # Solicita el certificado si no existe, si existe intenta renovar

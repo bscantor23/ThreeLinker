@@ -24,9 +24,8 @@ services:
     image: redis:7.2-alpine
     container_name: threelinker-redis
     restart: unless-stopped
-    # OPCIONAL: puedes quitar este puerto en prod para no exponer Redis hacia internet
     ports:
-      - "6379:6379"
+      - "6379:6379"           # puedes quitarlo en prod si no quieres exponer Redis
     volumes:
       - redis-data:/data
     networks:
@@ -45,26 +44,26 @@ services:
       start_period: 10s
     logging: *default-logging
 
-  # Frontend Server - Vite Dev Server (no build estático)
+  # Frontend Server - Vite Dev
   frontend:
-    build:
+    container_name: threelinker-frontend
+    build:                      # 👈 SOLO opciones de build aquí dentro
       context: .
       dockerfile: Dockerfile
-      target: development          # 👈 ahora el stage SÍ existe
-      container_name: threelinker-frontend
-      restart: unless-stopped
-      ports:
-        - "5173:5173"                # Vite
-      networks:
-        - threelinker-network
-      environment:
-        - NODE_ENV=development
-        - VITE_SERVER_URL=https://threelinker.genodev.com.co
-      volumes:
-        - .:/app                     # código en caliente
-        - /app/node_modules          # para no pisar node_modules del contenedor
-      command: ["npm", "run", "dev"] # opcional, ya es el CMD por defecto del stage
-      logging: *default-logging
+      target: development
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    networks:
+      - threelinker-network
+    environment:
+      - NODE_ENV=development
+      - VITE_SERVER_URL=http://ec2-13-222-163-221.compute-1.amazonaws.com:3001
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev"]
+    logging: *default-logging
 
   # Socket.IO Server 1 (Primary)
   threelinker-server-1:
@@ -122,7 +121,7 @@ services:
         condition: service_healthy
     logging: *default-logging
 
-  # nginx Load Balancer / Reverse Proxy
+  # nginx Load Balancer
   nginx:
     image: nginx:1.25-alpine
     container_name: threelinker-nginx
@@ -155,7 +154,6 @@ services:
       start_period: 10s
     logging: *default-logging
 
-  # Certbot para SSL (standalone / webroot)
   certbot:
     image: certbot/certbot:latest
     container_name: threelinker-certbot
@@ -166,4 +164,4 @@ services:
     networks:
       - threelinker-network
     ports:
-      - "80:80"
+      - "80:80"   # solo se usa cuando paras nginx y corres certbot standalone

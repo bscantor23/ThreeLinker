@@ -89,6 +89,24 @@ jobs:
           sleep 10
           
           echo "✅ Nginx started with conditional SSL configuration"
+          
+      - name: Verify domain connectivity
+        run: |
+          # Verificar conectividad del dominio
+          echo "🌐 Verificando conectividad del dominio..."
+          DOMAIN="threelinker.genodev.com.co"
+          
+          # Verificar DNS
+          echo "📡 Verificando DNS para $DOMAIN..."
+          nslookup $DOMAIN || echo "⚠️  DNS lookup failed"
+          
+          # Verificar conectividad HTTP
+          echo "🔌 Verificando conectividad HTTP..."
+          curl -v --connect-timeout 10 http://$DOMAIN/.well-known/acme-challenge/test || echo "⚠️  HTTP connection failed"
+          
+          # Verificar que nginx responda internamente
+          echo "🏠 Verificando nginx interno..."
+          docker-compose exec nginx curl -f http://localhost/.well-known/acme-challenge/test || echo "⚠️  Internal nginx check failed"
 
       - name: Start nginx with HTTP-only config
         run: |
@@ -106,14 +124,43 @@ jobs:
           CERTBOT_EMAIL: bscantor3@gmail.com
           DOMAIN: threelinker.genodev.com.co
         run: |
-          # Solicita el certificado si no existe, si existe intenta renovar
-          if [ ! -d ./nginx/certbot-www ]; then mkdir -p ./nginx/certbot-www; fi
-          docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$CERTBOT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN" || \
-          docker-compose run --rm certbot renew
+          # Verificar que nginx esté funcionando antes de solicitar certificados
+          echo "🔍 Verificando que nginx esté accesible..."
+          timeout 30 bash -c 'until curl -f http://localhost/.well-known/acme-challenge/test 2>/dev/null; do sleep 2; done' || echo "⚠️  Nginx no está completamente listo, continuando..."
+          
+          # Solicita el certificado usando standalone mode (más confiable)
+          echo "🔐 Solicitando certificado SSL..."
+          docker-compose stop nginx || true
+          sleep 5
+          docker-compose run --rm certbot certonly --standalone --email "$CERTBOT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN" || {
+            echo "❌ Certbot standalone falló, intentando con webroot..."
+            docker-compose start nginx
+            sleep 10
+            if [ ! -d ./nginx/certbot-www ]; then mkdir -p ./nginx/certbot-www; fi
+            docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$CERTBOT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN"
+          }
+          docker-compose start nginx
 
       - name: Recargar nginx tras certbot
         run: |
           docker-compose exec nginx nginx -s reload || true
+          
+      - name: SSL Setup Troubleshooting
+        if: failure()
+        run: |
+          echo "🔧 Troubleshooting SSL setup..."
+          echo "=== Container Status ==="
+          docker-compose ps
+          echo "=== Nginx Logs ==="
+          docker-compose logs nginx --tail=20
+          echo "=== Certbot Logs ==="
+          docker-compose logs certbot --tail=10 || echo "No certbot logs found"
+          echo "=== Network Status ==="
+          docker network ls
+          docker network inspect threelinker_threelinker-network || echo "Network not found"
+          
+          echo "💡 SSL setup failed, but deployment can continue without SSL"
+          echo "🌐 Site will be available on HTTP until SSL is manually configured"
           
       - name: Verify deployment
         run: |

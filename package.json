@@ -5,6 +5,7 @@
   "type": "module",
   "main": "index.html",
   "scripts": {
+    "dev": "vite",
     "build": "vite build",
     "server": "node server.js",
     "docker:start": "docker-compose up -d",
@@ -21,6 +22,9 @@
     "three": "^0.180.0",
     "three-gpu-pathtracer": "^0.0.23",
     "three-mesh-bvh": "^0.7.4"
+  },
+  "devDependencies": {
+    "vite": "^5.4.21"
   },
   "keywords": [
     "three.js",

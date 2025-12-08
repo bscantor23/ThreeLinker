@@ -23,7 +23,7 @@ jobs:
 
       - name: Limpiar logs de nginx antes de build
         run: |
-          sudo rm -rf nginx/logs/*
+          sudo rm -rf nginx/logs/* || true
 
       - name: Setup Docker permissions
         run: |
@@ -36,16 +36,10 @@ jobs:
           # Verify Docker access
           docker --version
           
-      - name: Create environment file and ensure package-lock.json exists
+      - name: Create environment file
         run: |
-          echo "VITE_SERVER_URL=http://${{ vars.DOMAIN }}" > .env
+          echo "VITE_SERVER_URL=${{ vars.DOMAIN }}" > .env
           echo "PORT=3001" >> .env
-          
-          # Ensure package-lock.json exists and is valid
-          if [ ! -f package-lock.json ]; then
-            echo "📦 package-lock.json missing, generating..."
-            npm install
-          fi
           
       - name: Complete system cleanup before deploy
         run: |
@@ -55,9 +49,9 @@ jobs:
           # Aggressive Docker cleanup
           docker system prune -f --volumes --all || true
           
-          # Clean npm cache and node_modules
+          # Clean npm cache and node_modules (pero NO borrar package-lock.json)
           npm cache clean --force || true
-          rm -rf node_modules package-lock.json || true
+          rm -rf node_modules || true
           
           # Clean build artifacts and logs
           rm -rf dist build logs nginx/cache || true
@@ -72,6 +66,7 @@ jobs:
           
       - name: Build and start services WITHOUT SSL first
         env:
+          # Esta variable se pasa al docker-compose (frontend usa ${VITE_SERVER_URL})
           VITE_SERVER_URL: ${{ vars.DOMAIN }}
         run: |
           docker-compose build --no-cache
@@ -81,14 +76,13 @@ jobs:
       - name: Start nginx with existing config (handles SSL conditionally)
         run: |
           # Use the existing nginx.conf which has conditional SSL logic
-          # No need to overwrite - the config handles missing certificates gracefully
           docker-compose up -d nginx
           
           # Wait for nginx to be ready
           echo "Waiting for nginx to start..."
           sleep 10
           
-          echo "✅ Nginx started with conditional SSL configuration"
+          echo "✅ Nginx started with conditional SSL configuration (HTTP disponible)"
           
       - name: Verify domain connectivity
         run: |
@@ -100,7 +94,7 @@ jobs:
           echo "📡 Verificando DNS para $DOMAIN..."
           nslookup $DOMAIN || echo "⚠️  DNS lookup failed"
           
-          # Verificar conectividad HTTP
+          # Verificar conectividad HTTP externa (puerto 80 contra nginx)
           echo "🔌 Verificando conectividad HTTP..."
           curl -v --connect-timeout 10 http://$DOMAIN/.well-known/acme-challenge/test || echo "⚠️  HTTP connection failed"
           
@@ -108,41 +102,35 @@ jobs:
           echo "🏠 Verificando nginx interno..."
           docker-compose exec nginx curl -f http://localhost/.well-known/acme-challenge/test || echo "⚠️  Internal nginx check failed"
 
-      - name: Start nginx with HTTP-only config
-        run: |
-          # Start nginx with HTTP-only config
-          docker-compose up -d nginx
-          
-          # Wait for nginx to be ready
-          echo "Waiting for nginx to start..."
-          sleep 10
-          
-          echo "✅ Nginx started with HTTP-only configuration (SSL disabled)"
-
       - name: Obtener/renovar certificado SSL con Certbot
         env:
           CERTBOT_EMAIL: bscantor3@gmail.com
           DOMAIN: threelinker.genodev.com.co
         run: |
           # Verificar que nginx esté funcionando antes de solicitar certificados
-          echo "🔍 Verificando que nginx esté accesible..."
+          echo "🔍 Verificando que nginx esté accesible antes del challenge..."
           timeout 30 bash -c 'until curl -f http://localhost/.well-known/acme-challenge/test 2>/dev/null; do sleep 2; done' || echo "⚠️  Nginx no está completamente listo, continuando..."
           
-          # Solicita el certificado usando standalone mode (más confiable)
-          echo "🔐 Solicitando certificado SSL..."
+          # Solicita el certificado usando standalone mode (usa directamente el puerto 80 del host)
+          echo "🔐 Solicitando certificado SSL (standalone)..."
           docker-compose stop nginx || true
           sleep 5
+          
           docker-compose run --rm --service-ports certbot \
             certonly --standalone \
             --email "$CERTBOT_EMAIL" \
             --agree-tos --no-eff-email \
             -d "$DOMAIN"
+          
+          echo "✅ Certificado solicitado, levantando de nuevo nginx..."
           docker-compose start nginx
+          sleep 10
 
       - name: Recargar nginx tras certbot
         run: |
           docker-compose exec nginx nginx -s reload || true
-          
+          echo "🔁 Nginx recargado tras obtener/renovar certificados"
+
       - name: SSL Setup Troubleshooting
         if: failure()
         run: |
@@ -150,19 +138,19 @@ jobs:
           echo "=== Container Status ==="
           docker-compose ps
           echo "=== Nginx Logs ==="
-          docker-compose logs nginx --tail=20
+          docker-compose logs nginx --tail=50 || true
           echo "=== Certbot Logs ==="
-          docker-compose logs certbot --tail=10 || echo "No certbot logs found"
+          docker-compose logs certbot --tail=50 || echo "No certbot logs found"
           echo "=== Network Status ==="
           docker network ls
-          docker network inspect threelinker_threelinker-network || echo "Network not found"
+          docker network inspect threelinker-network || echo "Network not found"
           
           echo "💡 SSL setup failed, but deployment can continue without SSL"
           echo "🌐 Site will be available on HTTP until SSL is manually configured"
           
       - name: Verify deployment
         run: |
-          # Check if containers are running
+          echo "✅ Verificando contenedores en ejecución..."
           docker-compose ps
           
       - name: Post-deploy cleanup
@@ -183,5 +171,5 @@ jobs:
         run: |
           echo "=== Container Status ==="
           docker-compose ps
-          echo "=== Service Logs ==="
-          docker-compose logs --tail=50
+          echo "=== Service Logs (últimos 50 logs por servicio) ==="
+          docker-compose logs --tail=50 || true

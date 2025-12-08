@@ -24,8 +24,6 @@ services:
     image: redis:7.2-alpine
     container_name: threelinker-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"           # puedes quitarlo en prod si no quieres exponer Redis
     volumes:
       - redis-data:/data
     networks:
@@ -47,7 +45,7 @@ services:
   # Frontend Server - Vite Dev
   frontend:
     container_name: threelinker-frontend
-    build:                      # 👈 SOLO opciones de build aquí dentro
+    build:
       context: .
       dockerfile: Dockerfile
       target: development
@@ -58,7 +56,7 @@ services:
       - threelinker-network
     environment:
       - NODE_ENV=development
-      - VITE_SERVER_URL=http://ec2-13-222-163-221.compute-1.amazonaws.com:3001
+      - VITE_SERVER_URL=${VITE_SERVER_URL}
     volumes:
       - .:/app
       - /app/node_modules
@@ -73,8 +71,6 @@ services:
       target: server
     container_name: threelinker-server-1
     restart: unless-stopped
-    ports:
-      - "3001:3001"
     environment:
       - INSTANCE_ID=server-1
       - REDIS_HOST=threelinker-redis
@@ -104,8 +100,6 @@ services:
       target: server
     container_name: threelinker-server-2
     restart: unless-stopped
-    ports:
-      - "3002:3002"
     networks:
       - threelinker-network
     environment:
@@ -164,4 +158,4 @@ services:
     networks:
       - threelinker-network
     ports:
-      - "80:80"   # solo se usa cuando paras nginx y corres certbot standalone
+      - "80:80"

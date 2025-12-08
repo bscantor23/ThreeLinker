@@ -81,11 +81,15 @@ jobs:
 
       - name: Verify domain connectivity
         run: |
-          echo "🌐 Verificando conectividad del dominio..."
-          DOMAIN="${{ vars.DOMAIN }}"
+          set -e
+          echo '🌐 Verificando conectividad del dominio...'
+          DOMAIN="threelinker.genodev.com.co"
           
           echo "📡 Verificando DNS para $DOMAIN..."
-          nslookup $DOMAIN || echo "⚠️  DNS lookup failed"
+          nslookup "$DOMAIN" || echo "⚠️ DNS lookup failed"
           
           echo "🔌 Verificando conectividad HTTP..."
-          curl -v --connect-timeout 10 http://$DOMAIN/.well-known/acme-challenge/test || echo "⚠️  HTTP connection faile
+          curl -v --connect-timeout 10 "http://$DOMAIN/.well-known/acme-challenge/test" || echo "⚠️ HTTP connection failed (es normal si el archivo no existe)"
+          
+          echo "🏠 Verificando nginx interno..."
+          docker-compose exec nginx curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/health || echo "⚠️ Internal nginx check failed"

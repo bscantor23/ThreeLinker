@@ -42,6 +42,48 @@ services:
       start_period: 10s
     logging: *default-logging
 
+  # Socket.IO Server 1 (Primary)
+  threelinker-server-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server
+      args:
+        SERVER_PORT: 3001
+    container_name: threelinker-server-1
+    environment:
+      - PORT=3001
+      - INSTANCE_ID=server-1
+      - REDIS_HOST=threelinker-redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - NODE_ENV=production
+    networks:
+      - threelinker-network
+    depends_on:
+      - redis
+
+  # Socket.IO Server 2 (Backup)
+  threelinker-server-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server
+      args:
+        SERVER_PORT: 3002
+    container_name: threelinker-server-2
+    environment:
+      - PORT=3002
+      - INSTANCE_ID=server-2
+      - REDIS_HOST=threelinker-redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - NODE_ENV=production
+    networks:
+      - threelinker-network
+    depends_on:
+      - redis
+
   # Frontend Server - Vite Dev
   frontend:
     container_name: threelinker-frontend
@@ -61,64 +103,6 @@ services:
       - .:/app
       - /app/node_modules
     command: ["npm", "run", "dev"]
-    logging: *default-logging
-
-  # Socket.IO Server 1 (Primary)
-  threelinker-server-1:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: server
-      args:
-        SERVER_PORT: 3001
-    container_name: threelinker-server-1
-    environment:
-      - PORT=3001
-      - INSTANCE_ID=server-1
-      - REDIS_HOST=threelinker-redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - NODE_ENV=production
-    depends_on:
-      redis:
-        condition: service_healthy
-    command: ["node", "server.js"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    networks:
-      - threelinker-network
-    logging: *default-logging
-
-  # Socket.IO Server 2 (Backup)
-  threelinker-server-2:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: server
-      args:
-        SERVER_PORT: 3002
-    container_name: threelinker-server-2
-    environment:
-      - PORT=3002
-      - INSTANCE_ID=server-2
-      - REDIS_HOST=threelinker-redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - NODE_ENV=production
-    depends_on:
-      redis:
-        condition: service_healthy
-    command: ["node", "server.js"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
     logging: *default-logging
 
   # nginx Load Balancer

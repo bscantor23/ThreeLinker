@@ -53,10 +53,14 @@ console.log(`🔧 Configuración:`, {
 // Configurar Redis Adapter para Socket.IO
 async function setupRedisAdapter() {
   try {
+    // Formato URL correcto para Redis v4+
+    const redisUrl = `redis://${ENV_CONFIG.REDIS_HOST}:${ENV_CONFIG.REDIS_PORT}`;
+    if (ENV_CONFIG.REDIS_PASSWORD) {
+      redisUrl.replace('redis://', `redis://:${ENV_CONFIG.REDIS_PASSWORD}@`);
+    }
+    
     const pubClient = createClient({
-      host: ENV_CONFIG.REDIS_HOST,
-      port: ENV_CONFIG.REDIS_PORT,
-      password: ENV_CONFIG.REDIS_PASSWORD,
+      url: redisUrl,
       db: ENV_CONFIG.REDIS_DB
     });
 

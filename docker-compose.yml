@@ -58,7 +58,7 @@ services:
       - threelinker-network
     environment:
       - NODE_ENV=development
-      - VITE_SERVER_URL=http://localhost
+      - VITE_SERVER_URL=https://threelinker.genodev.com.co
     volumes:
       - .:/app
       - /app/node_modules

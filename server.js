@@ -81,8 +81,12 @@ async function setupRedisAdapter() {
 // Configurar Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: [
+      "http://localhost:5173",
+      "https://threelinker.genodev.com.co",
+    ],
     methods: ["GET", "POST"],
+    credentials: true,
   },
   maxHttpBufferSize: 10e6, // 10MB
   pingTimeout: ENV_CONFIG.SOCKET_TIMEOUT || 60000,

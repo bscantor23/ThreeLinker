@@ -49,10 +49,25 @@ jobs:
           docker-compose build --no-cache
           docker-compose up -d
           
+
       - name: Wait for services to start
         run: |
           echo "Waiting for services to be ready..."
           sleep 5
+
+      - name: Obtener/renovar certificado SSL con Certbot
+        env:
+          CERTBOT_EMAIL: tucorreo@dominio.com
+          DOMAIN: threelinker.genodev.com.co
+        run: |
+          # Solicita el certificado si no existe, si existe intenta renovar
+          if [ ! -d ./nginx/certbot-www ]; then mkdir -p ./nginx/certbot-www; fi
+          docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$CERTBOT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN" || \
+          docker compose run --rm certbot renew
+
+      - name: Recargar nginx tras certbot
+        run: |
+          docker compose exec nginx nginx -s reload || true
           
       - name: Verify deployment
         run: |

@@ -60,13 +60,6 @@ COPY . .
 ARG VITE_SERVER_URL=http://localhost
 ENV VITE_SERVER_URL=${VITE_SERVER_URL}
 
-# Build optimizado del frontend
-RUN echo "🏗️ Iniciando build de Vite..." && \
-    npm run build && \
-    echo "📊 Estadísticas del build:" && \
-    ls -la dist/ && \
-    du -sh dist/
-
 # ==========================
 # STAGE: Server Runtime (backend Node)
 # ==========================

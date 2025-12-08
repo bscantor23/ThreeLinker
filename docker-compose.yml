@@ -92,6 +92,7 @@ services:
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
       - ./nginx/certbot-www:/var/www/certbot
+    environment:
       - INSTANCE_ID=server-1
       - REDIS_HOST=172.20.0.10
       - REDIS_PORT=6379

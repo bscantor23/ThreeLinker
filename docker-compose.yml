@@ -85,13 +85,12 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
-    # volumes:
-      # - ./server:/app/server
-    networks:
-      threelinker-network:
-        ipv4_address: 172.20.0.20
-    environment:
-      - PORT=3001
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - nginx-cache:/tmp/nginx_cache
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - ./nginx/certbot-www:/var/www/certbot
       - INSTANCE_ID=server-1
       - REDIS_HOST=172.20.0.10
       - REDIS_PORT=6379

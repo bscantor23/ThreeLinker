@@ -178,3 +178,5 @@ services:
       - ./nginx/certbot-www:/var/www/certbot
     networks:
       - threelinker-network
+    ports:
+      - "80:80"

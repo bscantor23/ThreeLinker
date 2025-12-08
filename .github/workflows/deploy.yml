@@ -67,24 +67,34 @@ jobs:
         env:
           DOMAIN: threelinker.genodev.com.co
         run: |
-          echo "🔍 Verificando si existe certificado para $DOMAIN..."
-          
-          if docker run --rm -v certbot-etc:/etc/letsencrypt alpine \
+          set -e
+          echo "🔍 Buscando volumen real de certbot-etc..."
+
+          # Buscar el volumen que realmente usa docker-compose (ej: threelinker_certbot-etc)
+          VOLUME_NAME="$(docker volume ls --format '{{.Name}}' | grep 'certbot-etc' | head -n 1 || true)"
+
+          if [ -z "$VOLUME_NAME" ]; then
+            echo "⚠️ No se encontró volumen para certbot-etc, creándolo..."
+            VOLUME_NAME="$(docker volume create certbot-etc)"
+          fi
+
+          echo "📦 Usando volumen: $VOLUME_NAME"
+
+          # ¿Existe ya el certificado?
+          if docker run --rm -v "$VOLUME_NAME":/etc/letsencrypt alpine \
               sh -c "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem"; then
             echo "✅ Certificado existente encontrado, no se genera self-signed."
           else
             echo "⚠️ No se encontró certificado, generando self-signed temporal..."
-            docker run --rm \
-              -v certbot-etc:/etc/letsencrypt \
-              alpine sh -c "
-                apk add --no-cache openssl && \
-                mkdir -p /etc/letsencrypt/live/$DOMAIN && \
-                openssl req -x509 -nodes -days 30 -newkey rsa:2048 \
-                  -keyout /etc/letsencrypt/live/$DOMAIN/privkey.pem \
-                  -out /etc/letsencrypt/live/$DOMAIN/fullchain.pem \
-                  -subj \"/CN=$DOMAIN\"
-              "
-            echo '✅ Certificado self-signed generado y guardado en certbot-etc.'
+            docker run --rm -v "$VOLUME_NAME":/etc/letsencrypt alpine sh -c "
+              apk add --no-cache openssl && \
+              mkdir -p /etc/letsencrypt/live/$DOMAIN && \
+              openssl req -x509 -nodes -days 30 -newkey rsa:2048 \
+                -keyout /etc/letsencrypt/live/$DOMAIN/privkey.pem \
+                -out /etc/letsencrypt/live/$DOMAIN/fullchain.pem \
+                -subj \"/CN=$DOMAIN\"
+            "
+            echo '✅ Certificado self-signed generado y guardado en el volumen correcto.'
           fi
 
       - name: Start nginx

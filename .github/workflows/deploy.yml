@@ -27,49 +27,66 @@ jobs:
 
       - name: Setup Docker permissions
         run: |
-          # Add user to docker group (en runner self-hosted)
           sudo usermod -aG docker $USER || true
-          # Change socket permissions
           sudo chmod 666 /var/run/docker.sock || true
-          # Verify Docker access
           docker --version
           
       - name: Create environment file
         run: |
           echo "VITE_SERVER_URL=https://${{ vars.DOMAIN }}" > .env
-          # PORT ya no es necesario aquí; se maneja en docker-compose por servicio
+          # PORT lo gestionan los servicios en docker-compose, no aquí
 
       - name: Complete system cleanup before deploy
         run: |
-          # Stop all containers and remove volumes
           docker-compose down -v --remove-orphans || true
           
-          # Aggressive Docker cleanup
           docker system prune -f --volumes --all || true
           
-          # Clean npm cache and node_modules (pero NO borrar package-lock.json)
           npm cache clean --force || true
           rm -rf node_modules || true
           
-          # Clean build artifacts and logs
           rm -rf dist build logs nginx/cache || true
           
-          # Check disk space
           df -h
           docker system df
 
-      - name: Ensure Docker network exists
+      - name: Ensure Docker network and volumes exist
         run: |
           docker network inspect threelinker-network >/dev/null 2>&1 || docker network create threelinker-network
+          docker volume inspect certbot-etc >/dev/null 2>&1 || docker volume create certbot-etc
+          docker volume inspect certbot-var >/dev/null 2>&1 || docker volume create certbot-var
           
-      - name: Build and start services WITHOUT SSL first
+      - name: Build and start core services (sin nginx)
         env:
           VITE_SERVER_URL: https://${{ vars.DOMAIN }}
         run: |
           docker-compose build --no-cache
-          # Start core services
           docker-compose up -d redis threelinker-server-1 threelinker-server-2 frontend
+
+      - name: Ensure SSL certificate exists (self-signed fallback)
+        env:
+          DOMAIN: threelinker.genodev.com.co
+        run: |
+          echo "🔍 Verificando si existe certificado para $DOMAIN..."
           
+          if docker run --rm -v certbot-etc:/etc/letsencrypt alpine \
+              sh -c "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem"; then
+            echo "✅ Certificado existente encontrado, no se genera self-signed."
+          else
+            echo "⚠️ No se encontró certificado, generando self-signed temporal..."
+            docker run --rm \
+              -v certbot-etc:/etc/letsencrypt \
+              alpine sh -c "
+                apk add --no-cache openssl && \
+                mkdir -p /etc/letsencrypt/live/$DOMAIN && \
+                openssl req -x509 -nodes -days 30 -newkey rsa:2048 \
+                  -keyout /etc/letsencrypt/live/$DOMAIN/privkey.pem \
+                  -out /etc/letsencrypt/live/$DOMAIN/fullchain.pem \
+                  -subj \"/CN=$DOMAIN\"
+              "
+            echo '✅ Certificado self-signed generado y guardado en certbot-etc.'
+          fi
+
       - name: Start nginx
         run: |
           docker-compose up -d nginx
@@ -83,7 +100,7 @@ jobs:
         run: |
           set -e
           echo '🌐 Verificando conectividad del dominio...'
-          DOMAIN="threelinker.genodev.com.co"
+          DOMAIN="${{ vars.DOMAIN }}"
           
           echo "📡 Verificando DNS para $DOMAIN..."
           nslookup "$DOMAIN" || echo "⚠️ DNS lookup failed"
@@ -93,3 +110,67 @@ jobs:
           
           echo "🏠 Verificando nginx interno..."
           docker-compose exec nginx curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/health || echo "⚠️ Internal nginx check failed"
+
+      - name: Obtener/renovar certificado SSL con Certbot (webroot)
+        env:
+          CERTBOT_EMAIL: bscantor3@gmail.com
+          DOMAIN: threelinker.genodev.com.co
+        run: |
+          echo "🔐 Intentando obtener/renovar certificado SSL (webroot)..."
+          
+          set +e
+          docker-compose run --rm certbot certonly \
+            --webroot -w /var/www/certbot \
+            --email "$CERTBOT_EMAIL" \
+            --agree-tos --no-eff-email \
+            -d "$DOMAIN"
+          CERTBOT_EXIT=$?
+          set -e
+          
+          if [ "$CERTBOT_EXIT" -eq 0 ]; then
+            echo "✅ Certbot completado correctamente, recargando nginx..."
+            docker-compose exec nginx nginx -s reload || true
+          else
+            echo "⚠️ Certbot falló (rate limit o problema de HTTP/DNS)."
+            echo "   Se mantiene el certificado actual (self-signed o el último válido)."
+          fi
+
+      - name: SSL Setup Troubleshooting
+        if: failure()
+        run: |
+          echo "🔧 Troubleshooting SSL setup..."
+          echo "=== Container Status ==="
+          docker-compose ps
+          echo "=== Nginx Logs ==="
+          docker-compose logs nginx --tail=50 || true
+          echo "=== Certbot Logs ==="
+          docker-compose logs certbot --tail=50 || echo "No certbot logs found"
+          echo "=== Network Status ==="
+          docker network ls
+          docker network inspect threelinker-network || echo "Network not found"
+          
+          echo "💡 SSL setup failed, pero el despliegue puede seguir con el certificado actual."
+
+      - name: Verify deployment
+        run: |
+          echo "✅ Verificando contenedores en ejecución..."
+          docker-compose ps
+          
+      - name: Post-deploy cleanup
+        if: always()
+        run: |
+          docker system prune -f || true
+          npm cache clean --force || true
+          
+          echo "=== Final Disk Usage ==="
+          df -h
+          echo "=== Final Docker Usage ==="
+          docker system df
+
+      - name: Show service logs
+        if: failure()
+        run: |
+          echo "=== Container Status ==="
+          docker-compose ps
+          echo "=== Service Logs (últimos 50 logs por servicio) ==="
+          docker-compose logs --tail=50 || true

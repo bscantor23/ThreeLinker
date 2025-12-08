@@ -27,20 +27,18 @@ jobs:
 
       - name: Setup Docker permissions
         run: |
-          # Add user to docker group
-          sudo usermod -aG docker $USER
+          # Add user to docker group (en runner self-hosted)
+          sudo usermod -aG docker $USER || true
           # Change socket permissions
-          sudo chmod 666 /var/run/docker.sock
-          # Refresh group membership
-          newgrp docker
+          sudo chmod 666 /var/run/docker.sock || true
           # Verify Docker access
           docker --version
           
       - name: Create environment file
         run: |
-          echo "VITE_SERVER_URL=http://${{ vars.DOMAIN }}" > .env
-          echo "PORT=3001" >> .env
-          
+          echo "VITE_SERVER_URL=https://${{ vars.DOMAIN }}" > .env
+          # PORT ya no es necesario aquí; se maneja en docker-compose por servicio
+
       - name: Complete system cleanup before deploy
         run: |
           # Stop all containers and remove volumes
@@ -66,114 +64,28 @@ jobs:
           
       - name: Build and start services WITHOUT SSL first
         env:
-          # Esta variable se pasa al docker-compose (frontend usa ${VITE_SERVER_URL})
-          VITE_SERVER_URL: http://${{ vars.DOMAIN }}
+          VITE_SERVER_URL: https://${{ vars.DOMAIN }}
         run: |
           docker-compose build --no-cache
-          # Start services EXCEPT nginx (we'll start nginx separately without SSL)
+          # Start core services
           docker-compose up -d redis threelinker-server-1 threelinker-server-2 frontend
           
-      - name: Start nginx with existing config (handles SSL conditionally)
+      - name: Start nginx
         run: |
-          # Use the existing nginx.conf which has conditional SSL logic
           docker-compose up -d nginx
           
-          # Wait for nginx to be ready
           echo "Waiting for nginx to start..."
           sleep 10
           
-          echo "✅ Nginx started with conditional SSL configuration (HTTP disponible)"
-          
+          echo "✅ Nginx started (HTTP y HTTPS configurados)"
+
       - name: Verify domain connectivity
         run: |
-          # Verificar conectividad del dominio
           echo "🌐 Verificando conectividad del dominio..."
-          DOMAIN="threelinker.genodev.com.co"
+          DOMAIN="${{ vars.DOMAIN }}"
           
-          # Verificar DNS
           echo "📡 Verificando DNS para $DOMAIN..."
           nslookup $DOMAIN || echo "⚠️  DNS lookup failed"
           
-          # Verificar conectividad HTTP externa (puerto 80 contra nginx)
           echo "🔌 Verificando conectividad HTTP..."
-          curl -v --connect-timeout 10 http://$DOMAIN/.well-known/acme-challenge/test || echo "⚠️  HTTP connection failed"
-          
-          # Verificar que nginx responda internamente
-          echo "🏠 Verificando nginx interno..."
-          docker-compose exec nginx curl -f http://localhost/.well-known/acme-challenge/test || echo "⚠️  Internal nginx check failed"
-
-      - name: Obtener/renovar certificado SSL con Certbot
-        env:
-          CERTBOT_EMAIL: bscantor3@gmail.com
-          DOMAIN: threelinker.genodev.com.co
-        run: |
-          echo "🔐 Intentando obtener/renovar certificado SSL..."
-          docker-compose stop nginx || true
-          sleep 5
-
-          set +e
-          docker-compose run --rm --service-ports certbot \
-            certonly --standalone \
-            --email "$CERTBOT_EMAIL" \
-            --agree-tos --no-eff-email \
-            -d "$DOMAIN"
-          CERTBOT_EXIT=$?
-          set -e
-
-          if [ "$CERTBOT_EXIT" -ne 0 ]; then
-            echo "⚠️ Certbot falló (probablemente rate limit)."
-            echo "   Se usará el certificado existente en /etc/letsencrypt si está presente."
-          else
-            echo "✅ Certbot completado correctamente."
-          fi
-
-          docker-compose start nginx
-          sleep 10
-
-      - name: Recargar nginx tras certbot
-        run: |
-          docker-compose exec nginx nginx -s reload || true
-          echo "🔁 Nginx recargado tras obtener/renovar certificados"
-
-      - name: SSL Setup Troubleshooting
-        if: failure()
-        run: |
-          echo "🔧 Troubleshooting SSL setup..."
-          echo "=== Container Status ==="
-          docker-compose ps
-          echo "=== Nginx Logs ==="
-          docker-compose logs nginx --tail=50 || true
-          echo "=== Certbot Logs ==="
-          docker-compose logs certbot --tail=50 || echo "No certbot logs found"
-          echo "=== Network Status ==="
-          docker network ls
-          docker network inspect threelinker-network || echo "Network not found"
-          
-          echo "💡 SSL setup failed, but deployment can continue without SSL"
-          echo "🌐 Site will be available on HTTP until SSL is manually configured"
-          
-      - name: Verify deployment
-        run: |
-          echo "✅ Verificando contenedores en ejecución..."
-          docker-compose ps
-          
-      - name: Post-deploy cleanup
-        if: always()
-        run: |
-          # Clean up after deployment
-          docker system prune -f || true
-          npm cache clean --force || true
-          
-          # Show final disk usage
-          echo "=== Final Disk Usage ==="
-          df -h
-          echo "=== Final Docker Usage ==="
-          docker system df
-
-      - name: Show service logs
-        if: failure()
-        run: |
-          echo "=== Container Status ==="
-          docker-compose ps
-          echo "=== Service Logs (últimos 50 logs por servicio) ==="
-          docker-compose logs --tail=50 || true
+          curl -v --connect-timeout 10 http://$DOMAIN/.well-known/acme-challenge/test || echo "⚠️  HTTP connection faile

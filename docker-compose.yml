@@ -72,6 +72,7 @@ services:
     container_name: threelinker-server-1
     restart: unless-stopped
     environment:
+      - PORT=3001
       - INSTANCE_ID=server-1
       - REDIS_HOST=threelinker-redis
       - REDIS_PORT=6379
@@ -113,6 +114,13 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    command: ["node", "server.js"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     logging: *default-logging
 
   # nginx Load Balancer
@@ -141,6 +149,7 @@ services:
       - NGINX_HOST=localhost
       - NGINX_PORT=80
     healthcheck:
+      # usa el endpoint sin redirección que definimos en el server 80
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
       timeout: 10s
@@ -157,5 +166,4 @@ services:
       - ./nginx/certbot-www:/var/www/certbot
     networks:
       - threelinker-network
-    ports:
-      - "80:80"
+    # NO exponemos 80 aquí para evitar conflicto; Nginx sirve el webroot

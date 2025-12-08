@@ -41,27 +41,59 @@ jobs:
           echo "VITE_SERVER_URL=http://${{ vars.DOMAIN }}" > .env
           echo "PORT=3001" >> .env
           
-      - name: Stop existing containers
+      - name: Complete system cleanup before deploy
         run: |
-          docker-compose down || true
-          docker system prune -f || true
+          # Stop all containers and remove volumes
+          docker-compose down -v --remove-orphans || true
+          
+          # Aggressive Docker cleanup
+          docker system prune -f --volumes --all || true
+          
+          # Clean npm cache and node_modules
+          npm cache clean --force || true
+          rm -rf node_modules package-lock.json || true
+          
+          # Clean build artifacts and logs
+          rm -rf dist build logs nginx/cache || true
+          
+          # Check disk space
+          df -h
+          docker system df
 
       - name: Ensure Docker network exists
         run: |
           docker network inspect threelinker-network >/dev/null 2>&1 || docker network create threelinker-network
           
-      - name: Build and start services
+      - name: Build and start services WITHOUT SSL first
         env:
           VITE_SERVER_URL: ${{ vars.DOMAIN }}
         run: |
           docker-compose build --no-cache
-          docker-compose up -d
+          # Start services EXCEPT nginx (we'll start nginx separately without SSL)
+          docker-compose up -d redis threelinker-server-1 threelinker-server-2 frontend
           
-
-      - name: Wait for services to start
+      - name: Start nginx with existing config (handles SSL conditionally)
         run: |
-          echo "Waiting for services to be ready..."
-          sleep 5
+          # Use the existing nginx.conf which has conditional SSL logic
+          # No need to overwrite - the config handles missing certificates gracefully
+          docker-compose up -d nginx
+          
+          # Wait for nginx to be ready
+          echo "Waiting for nginx to start..."
+          sleep 10
+          
+          echo "✅ Nginx started with conditional SSL configuration"
+
+      - name: Start nginx with HTTP-only config
+        run: |
+          # Start nginx with HTTP-only config
+          docker-compose up -d nginx
+          
+          # Wait for nginx to be ready
+          echo "Waiting for nginx to start..."
+          sleep 10
+          
+          echo "✅ Nginx started with HTTP-only configuration (SSL disabled)"
 
       - name: Obtener/renovar certificado SSL con Certbot
         env:
@@ -82,6 +114,19 @@ jobs:
           # Check if containers are running
           docker-compose ps
           
+      - name: Post-deploy cleanup
+        if: always()
+        run: |
+          # Clean up after deployment
+          docker system prune -f || true
+          npm cache clean --force || true
+          
+          # Show final disk usage
+          echo "=== Final Disk Usage ==="
+          df -h
+          echo "=== Final Docker Usage ==="
+          docker system df
+
       - name: Show service logs
         if: failure()
         run: |

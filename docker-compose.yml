@@ -83,6 +83,7 @@ services:
       - "3001:3001"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/ssl-config.conf:/etc/nginx/conf.d/ssl-config.conf
       - nginx-cache:/tmp/nginx_cache
       - ./nginx/logs:/var/log/nginx
       - certbot-etc:/etc/letsencrypt
@@ -146,6 +147,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/ssl-config.conf:/etc/nginx/conf.d/ssl-config.conf
       - nginx-cache:/tmp/nginx_cache
       - ./nginx/logs:/var/log/nginx
       - certbot-etc:/etc/letsencrypt

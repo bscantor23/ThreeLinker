@@ -65,20 +65,14 @@ jobs:
 
       - name: Ensure SSL certificate exists (self-signed fallback)
         env:
-          DOMAIN: threelinker.genodev.com.co
+          DOMAIN: ${{ vars.DOMAIN }}
+
         run: |
           set -e
-          echo "🔍 Buscando volumen real de certbot-etc..."
+          echo "🔍 Verificando si existe certificado para $DOMAIN..."
 
-          # Buscar el volumen que realmente usa docker-compose (ej: threelinker_certbot-etc)
-          VOLUME_NAME="$(docker volume ls --format '{{.Name}}' | grep 'certbot-etc' | head -n 1 || true)"
-
-          if [ -z "$VOLUME_NAME" ]; then
-            echo "⚠️ No se encontró volumen para certbot-etc, creándolo..."
-            VOLUME_NAME="$(docker volume create certbot-etc)"
-          fi
-
-          echo "📦 Usando volumen: $VOLUME_NAME"
+          # Usamos SIEMPRE el volumen 'certbot-etc' (external en docker-compose)
+          VOLUME_NAME="certbot-etc"
 
           # ¿Existe ya el certificado?
           if docker run --rm -v "$VOLUME_NAME":/etc/letsencrypt alpine \
@@ -94,7 +88,7 @@ jobs:
                 -out /etc/letsencrypt/live/$DOMAIN/fullchain.pem \
                 -subj \"/CN=$DOMAIN\"
             "
-            echo '✅ Certificado self-signed generado y guardado en el volumen correcto.'
+            echo '✅ Certificado self-signed generado y guardado en el volumen certbot-etc.'
           fi
 
       - name: Start nginx
@@ -124,7 +118,8 @@ jobs:
       - name: Obtener/renovar certificado SSL con Certbot (webroot)
         env:
           CERTBOT_EMAIL: bscantor3@gmail.com
-          DOMAIN: threelinker.genodev.com.co
+          DOMAIN: ${{ vars.DOMAIN }}
+
         run: |
           echo "🔐 Intentando obtener/renovar certificado SSL (webroot)..."
           

@@ -60,6 +60,9 @@ COPY . .
 ARG VITE_SERVER_URL=http://localhost
 ENV VITE_SERVER_URL=${VITE_SERVER_URL}
 
+# (Opcionalmente aquí podrías hacer el build:)
+# RUN npm run build
+
 # ==========================
 # STAGE: Server Runtime (backend Node)
 # ==========================
@@ -81,26 +84,30 @@ COPY *.json ./
 RUN chown -R threelinker:nodejs /app
 USER threelinker
 
-# Variables de entorno por defecto
-ENV PORT=3001
+# Puerto del servidor parametrizable en BUILD
+# (se sobreescribe desde docker-compose con args: SERVER_PORT: 3001 / 3002...)
+ARG SERVER_PORT=3001
+ENV PORT=${SERVER_PORT}
+
+# Otras variables por defecto (pueden sobreescribirse en docker-compose)
 ENV INSTANCE_ID=server-1
 ENV REDIS_HOST=localhost
 ENV REDIS_PORT=6379
 ENV REDIS_DB=0
 
-# Health check
+# Health check usando el puerto configurado
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:${PORT}/api/health || exit 1
 
-# Exponer puerto
+# Exponer el puerto configurado (a nivel de metadata)
 EXPOSE ${PORT}
 
 # Script de inicio con verificación de Redis
 CMD sh -c " \
-    echo '🚀 Iniciando ${INSTANCE_ID} en puerto ${PORT}...' && \
+    echo \"🚀 Iniciando ${INSTANCE_ID} en puerto ${PORT}...\" && \
     echo '🔄 Verificando conexión Redis...' && \
     while ! nc -z ${REDIS_HOST} ${REDIS_PORT}; do \
-        echo '⏳ Esperando Redis en ${REDIS_HOST}:${REDIS_PORT}...' && \
+        echo \"⏳ Esperando Redis en ${REDIS_HOST}:${REDIS_PORT}...\" && \
         sleep 2; \
     done && \
     echo '✅ Redis disponible, iniciando servidor...' && \

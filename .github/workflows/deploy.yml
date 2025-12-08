@@ -21,6 +21,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Limpiar logs de nginx antes de build
+        run: |
+          sudo rm -rf nginx/logs/*
+
       - name: Setup Docker permissions
         run: |
           # Add user to docker group

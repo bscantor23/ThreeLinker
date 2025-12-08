@@ -66,12 +66,12 @@ jobs:
         run: |
           # Solicita el certificado si no existe, si existe intenta renovar
           if [ ! -d ./nginx/certbot-www ]; then mkdir -p ./nginx/certbot-www; fi
-          docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$CERTBOT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN" || \
-          docker compose run --rm certbot renew
+          docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$CERTBOT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN" || \
+          docker-compose run --rm certbot renew
 
       - name: Recargar nginx tras certbot
         run: |
-          docker compose exec nginx nginx -s reload || true
+          docker-compose exec nginx nginx -s reload || true
           
       - name: Verify deployment
         run: |

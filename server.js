@@ -83,7 +83,7 @@ const io = new Server(server, {
   cors: {
     origin: [
       "http://localhost:5173",
-      "https://threelinker.genodev.com.co",
+      "https://linker.genodev.com.co",
     ],
     methods: ["GET", "POST"],
     credentials: true,

@@ -397,7 +397,7 @@ class RoomManager {
     if (isLocal) {
       return serverIndex === 0 ? 'http://localhost:3001' : 'http://localhost:3002';
     } else {
-      const baseUrl = process.env.BASE_URL || 'https://threelinker.genodev.com.co';
+      const baseUrl = process.env.BASE_URL || 'https://linker.genodev.com.co';
       return baseUrl; // En producción, ambos servidores comparten el mismo dominio
     }
   }
@@ -413,7 +413,7 @@ class RoomManager {
     if (isLocal) {
       return `http://localhost:${port}`;
     } else {
-      return process.env.BASE_URL || 'https://threelinker.genodev.com.co';
+      return process.env.BASE_URL || 'https://linker.genodev.com.co';
     }
   }
 

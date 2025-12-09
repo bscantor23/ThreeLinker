@@ -24,7 +24,7 @@ class CollaborationManager {
         import.meta.env.VITE_SERVER_URL ||
         (typeof window !== "undefined"
           ? window.location.origin
-          : "https://threelinker.genodev.com.co");
+          : "https://linker.genodev.com.co");
 
       this.serverUrls = [baseUrl];
     }

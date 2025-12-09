@@ -42,33 +42,48 @@ class CollaborationManager {
       ];
       console.log('🧪 Modo desarrollo - URLs configuradas:', this.serverUrls);
     } else {
-      // 🚀 Producción: verificar si el servidor está disponible antes de usar
+      // 🚀 Producción: usar dominio de producción
       const baseUrl =
         import.meta.env.VITE_SERVER_URL ||
         (typeof window !== "undefined"
           ? window.location.origin
           : null);
 
-      if (baseUrl && baseUrl.includes('localhost')) {
-        // Si el entorno variable apunta a localhost, usar fallback de desarrollo
+      // En producción, solo usar localhost si explícitamente está configurado
+      // Y solo si estamos realmente en entorno de desarrollo
+      if (baseUrl && baseUrl.includes('localhost') && isLocal) {
+        // Solo para desarrollo local explícito
         this.serverUrls = [
           "http://localhost:3001",
           "http://localhost:3002",
         ];
-        console.log('🔧 Detectado servidor local en producción, usando fallback de desarrollo');
+        console.log('🔧 Desarrollo local detectado - URLs configuradas:', this.serverUrls);
+      } else if (baseUrl && !baseUrl.includes('localhost')) {
+        // Producción con dominio válido
+        this.serverUrls = [baseUrl];
+        console.log('🚀 Producción con dominio - URLs configuradas:', this.serverUrls);
       } else {
+        // Fallback: usar el origen actual (para casos edge)
         this.serverUrls = baseUrl ? [baseUrl] : [];
-        console.log('🚀 Modo producción - URLs configuradas:', this.serverUrls);
+        console.log('⚠️ Fallback de configuración - URLs:', this.serverUrls);
       }
     }
 
     // Verificar que tengamos URLs válidas
     if (this.serverUrls.length === 0) {
-      console.warn('⚠️ No se encontraron URLs de servidor válidas, usando fallback de desarrollo');
-      this.serverUrls = [
-        "http://localhost:3001",
-        "http://localhost:3002",
-      ];
+      if (isLocal) {
+        // Solo en desarrollo local usar fallback localhost
+        console.warn('⚠️ No se encontraron URLs de servidor válidas, usando fallback de desarrollo local');
+        this.serverUrls = [
+          "http://localhost:3001",
+          "http://localhost:3002",
+        ];
+      } else {
+        // En producción, usar el origen actual como fallback
+        console.warn('⚠️ No se encontraron URLs de servidor válidas, usando fallback de producción');
+        const currentOrigin = typeof window !== "undefined" ? window.location.origin : null;
+        this.serverUrls = currentOrigin ? [currentOrigin] : [];
+      }
     }
 
     console.log('🌐 URLs de servidor FINAL configuradas:', this.serverUrls);

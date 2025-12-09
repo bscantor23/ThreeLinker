@@ -14,7 +14,7 @@ RUN apk add --no-cache \
 
 # Crear usuario no-root
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S threelinker -u 1001
+    adduser -S linker -u 1001
 
 # Establecer directorio de trabajo
 WORKDIR /app
@@ -81,8 +81,8 @@ COPY server.js ./
 COPY *.json ./
 
 # Establecer permisos
-RUN chown -R threelinker:nodejs /app
-USER threelinker
+RUN chown -R linker:nodejs /app
+USER linker
 
 # Puerto del servidor parametrizable en BUILD
 # (se sobreescribe desde docker-compose con args: SERVER_PORT: 3001 / 3002...)
@@ -121,8 +121,8 @@ FROM frontend-builder AS frontend
 
 # Crear directorio para volumen compartido
 RUN mkdir -p /app/dist && \
-    chown -R threelinker:nodejs /app
-USER threelinker
+    chown -R linker:nodejs /app
+USER linker
 
 # Contenedor "dummy" para exponer /app/dist a nginx (via volume)
 CMD ["sh", "-c", "echo '📦 Frontend build listo para nginx' && tail -f /dev/null"]

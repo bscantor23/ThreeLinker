@@ -5,7 +5,7 @@ x-logging: &default-logging
     max-file: "3"
 
 networks:
-  threelinker-network:
+  linker-network:
     driver: bridge
 
 volumes:
@@ -22,12 +22,12 @@ services:
   # Redis - Shared State Store
   redis:
     image: redis:7.2-alpine
-    container_name: threelinker-redis
+    container_name: linker-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
     networks:
-      - threelinker-network
+      - linker-network
     command: >
       redis-server
       --appendonly yes
@@ -43,50 +43,50 @@ services:
     logging: *default-logging
 
   # Socket.IO Server 1 (Primary)
-  threelinker-server-1:
+  linker-server-1:
     build:
       context: .
       dockerfile: Dockerfile
       target: server
       args:
         SERVER_PORT: 3001
-    container_name: threelinker-server-1
+    container_name: linker-server-1
     environment:
       - PORT=3001
       - INSTANCE_ID=server-1
-      - REDIS_HOST=threelinker-redis
+      - REDIS_HOST=linker-redis
       - REDIS_PORT=6379
       - REDIS_DB=0
       - NODE_ENV=production
     networks:
-      - threelinker-network
+      - linker-network
     depends_on:
       - redis
 
   # Socket.IO Server 2 (Backup)
-  threelinker-server-2:
+  linker-server-2:
     build:
       context: .
       dockerfile: Dockerfile
       target: server
       args:
         SERVER_PORT: 3002
-    container_name: threelinker-server-2
+    container_name: linker-server-2
     environment:
       - PORT=3002
       - INSTANCE_ID=server-2
-      - REDIS_HOST=threelinker-redis
+      - REDIS_HOST=linker-redis
       - REDIS_PORT=6379
       - REDIS_DB=0
       - NODE_ENV=production
     networks:
-      - threelinker-network
+      - linker-network
     depends_on:
       - redis
 
   # Frontend Server - Vite Dev
   frontend:
-    container_name: threelinker-frontend
+    container_name: linker-frontend
     build:
       context: .
       dockerfile: Dockerfile
@@ -95,7 +95,7 @@ services:
     ports:
       - "5173:5173"
     networks:
-      - threelinker-network
+      - linker-network
     environment:
       - NODE_ENV=development
       - VITE_SERVER_URL=${VITE_SERVER_URL}
@@ -108,7 +108,7 @@ services:
   # nginx Load Balancer
   nginx:
     image: nginx:1.25-alpine
-    container_name: threelinker-nginx
+    container_name: linker-nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -122,11 +122,11 @@ services:
       - certbot-var:/var/lib/letsencrypt
       - ./nginx/certbot-www:/var/www/certbot
     networks:
-      - threelinker-network
+      - linker-network
     depends_on:
       - frontend
-      - threelinker-server-1
-      - threelinker-server-2
+      - linker-server-1
+      - linker-server-2
     environment:
       - NGINX_HOST=localhost
       - NGINX_PORT=80
@@ -141,11 +141,11 @@ services:
 
   certbot:
     image: certbot/certbot:latest
-    container_name: threelinker-certbot
+    container_name: linker-certbot
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
       - ./nginx/certbot-www:/var/www/certbot
     networks:
-      - threelinker-network
+      - linker-network
     # NO exponemos 80 aquí para evitar conflicto; Nginx sirve el webroot

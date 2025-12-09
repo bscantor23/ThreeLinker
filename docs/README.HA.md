@@ -87,7 +87,7 @@ nano .env
 
 ```nginx
 # nginx/nginx.conf - Sticky sessions por roomId
-upstream threelinker_backend {
+upstream linker_backend {
     hash $arg_roomId consistent;
     server 127.0.0.1:3001 max_fails=3 fail_timeout=30s;
     server 127.0.0.1:3002 max_fails=3 fail_timeout=30s backup;
@@ -173,10 +173,10 @@ curl http://localhost:3002/api/stats
 ./scripts/deploy-ha.sh logs
 
 # Logs específicos de nginx
-docker logs threelinker-nginx
+docker logs linker-nginx
 
 # Logs específicos de Redis
-docker logs threelinker-redis
+docker logs linker-redis
 ```
 
 ### Redis Insight (Opcional)
@@ -213,7 +213,7 @@ open http://localhost:8001
 # Build optimizado para nginx
 ./scripts/build-for-nginx.sh
 
-# Resultado: archivos en /var/www/threelinker
+# Resultado: archivos en /var/www/linker
 ```
 
 ## 📈 Comandos NPM
@@ -270,7 +270,7 @@ sudo systemctl stop nginx
 
 ```bash
 # Verificar Redis container
-docker logs threelinker-redis
+docker logs linker-redis
 
 # Conexión manual
 redis-cli -h localhost -p 6379 ping
@@ -280,8 +280,8 @@ redis-cli -h localhost -p 6379 ping
 
 ```bash
 # Verificar Redis Adapter
-docker logs threelinker-server-1
-docker logs threelinker-server-2
+docker logs linker-server-1
+docker logs linker-server-2
 
 # Verificar eventos en Redis
 redis-cli monitor
@@ -291,7 +291,7 @@ redis-cli monitor
 
 ```bash
 # Verificar volumen de archivos estáticos
-docker exec threelinker-nginx ls -la /var/www/threelinker
+docker exec linker-nginx ls -la /var/www/linker
 
 # Reconstruir frontend
 docker-compose -f docker-compose.ha.yml up --force-recreate frontend-builder
@@ -303,7 +303,7 @@ docker-compose -f docker-compose.ha.yml up --force-recreate frontend-builder
 
 ```nginx
 # Keepalive para backends
-upstream threelinker_backend {
+upstream linker_backend {
     keepalive 32;
 }
 

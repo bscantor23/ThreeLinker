@@ -33,7 +33,7 @@ if (PORT === 3001 || INSTANCE_ID === 'server-1') {
   instanceConfig = {
     PORT: PORT,
     INSTANCE_ID: INSTANCE_ID || `server-${PORT}`,
-    REDIS_KEY_PREFIX: 'threelinker:',
+    REDIS_KEY_PREFIX: 'linker:',
     HEALTH_ENDPOINT: `/health/${INSTANCE_ID || `server-${PORT}`}`
   };
 }

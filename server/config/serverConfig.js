@@ -8,7 +8,7 @@ export const SERVER_CONFIG = {
   instance1: {
     PORT: 3001,
     INSTANCE_ID: 'server-1',
-    REDIS_KEY_PREFIX: 'threelinker:',
+    REDIS_KEY_PREFIX: 'linker:',
     HEALTH_ENDPOINT: '/health/server-1'
   },
   
@@ -16,7 +16,7 @@ export const SERVER_CONFIG = {
   instance2: {
     PORT: 3002,
     INSTANCE_ID: 'server-2', 
-    REDIS_KEY_PREFIX: 'threelinker:',
+    REDIS_KEY_PREFIX: 'linker:',
     HEALTH_ENDPOINT: '/health/server-2'
   }
 };

@@ -127,7 +127,7 @@ jobs:
       - name: Deploy to EC2
         run: |
           ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} '
-            cd /opt/threelinker &&
+            cd /opt/linker &&
             git pull origin main &&
             docker-compose down &&
             docker-compose build --no-cache &&
@@ -709,7 +709,7 @@ upstream threelin_backend {
 
 server {
     listen 80;
-    server_name threelinker.com;
+    server_name linker.com;
     
     location /socket.io/ {
         proxy_pass http://threelin_backend;
@@ -1328,7 +1328,7 @@ CLEANUP_INTERVAL=300000
 VITE_SERVER_URL=http://localhost:3001
 
 # Production
-VITE_SERVER_URL=https://api.threelinker.com
+VITE_SERVER_URL=https://api.linker.com
 ```
 
 ### Scripts de Despliegue

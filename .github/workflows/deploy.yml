@@ -52,7 +52,7 @@ jobs:
 
       - name: Ensure Docker network and volumes exist
         run: |
-          docker network inspect threelinker-network >/dev/null 2>&1 || docker network create threelinker-network
+          docker network inspect linker-network >/dev/null 2>&1 || docker network create linker-network
           docker volume inspect certbot-etc >/dev/null 2>&1 || docker volume create certbot-etc
           docker volume inspect certbot-var >/dev/null 2>&1 || docker volume create certbot-var
           
@@ -61,7 +61,7 @@ jobs:
           VITE_SERVER_URL: https://${{ vars.DOMAIN }}
         run: |
           docker-compose build --no-cache
-          docker-compose up -d redis threelinker-server-1 threelinker-server-2 frontend
+          docker-compose up -d redis linker-server-1 linker-server-2 frontend
 
       - name: Ensure SSL certificate exists (self-signed fallback)
         env:
@@ -152,7 +152,7 @@ jobs:
           docker-compose logs certbot --tail=50 || echo "No certbot logs found"
           echo "=== Network Status ==="
           docker network ls
-          docker network inspect threelinker-network || echo "Network not found"
+          docker network inspect linker-network || echo "Network not found"
           
           echo "💡 SSL setup failed, pero el despliegue puede seguir con el certificado actual."
 

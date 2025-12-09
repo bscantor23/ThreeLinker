@@ -161,13 +161,36 @@ class CollaborationManager {
         },
         credentials: 'include'
       })
-      .then(response => response.json())
-      .then(data => {
+      .then(async response => {
         clearTimeout(timeout);
+        
+        // Verificar si la respuesta es exitosa
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // Verificar Content-Type para asegurar que es JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          // Intentar leer el texto para mostrar mejor información del error
+          const text = await response.text();
+          console.error(`Respuesta no-JSON del servidor ${this.serverUrl}${endpoint}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            contentType,
+            bodyPreview: text.substring(0, 200)
+          });
+          throw new Error(`Respuesta no-JSON recibida. Status: ${response.status}`);
+        }
+        
+        // Parsear JSON solo después de verificar que es válido
+        return response.json();
+      })
+      .then(data => {
         resolve(data);
       })
       .catch(error => {
-        clearTimeout(timeout);
+        console.error(`Error en fetchFromEndpoint ${endpoint}:`, error);
         reject(error);
       });
     });

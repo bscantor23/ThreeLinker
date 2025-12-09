@@ -178,7 +178,7 @@ app.get('/api/stats', (req, res) => {
 // Endpoint para obtener todas las salas de todos los servidores
 app.get('/api/all-rooms', async (req, res) => {
   try {
-    const activeRooms = await roomManager.getActiveRooms();
+    const activeRooms = await collaboration.roomManager.getActiveRooms();
     const serverInfo = {
       currentInstance: instanceConfig.INSTANCE_ID,
       currentPort: instanceConfig.PORT,

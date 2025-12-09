@@ -13,10 +13,13 @@ volumes:
     driver: local
   nginx-cache:
     driver: local
+
   certbot-etc:
     external: true
   certbot-var:
     external: true
+
+  certbot-www:
 
 services:
   # Redis - Shared State Store
@@ -120,7 +123,7 @@ services:
       - ./nginx/logs:/var/log/nginx
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
-      - ./nginx/certbot-www:/var/www/certbot
+      - certbot-www:/var/www/certbot
     networks:
       - linker-network
     depends_on:
@@ -131,7 +134,6 @@ services:
       - NGINX_HOST=localhost
       - NGINX_PORT=80
     healthcheck:
-      # usa el endpoint sin redirección que definimos en el server 80
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
       timeout: 10s
@@ -139,13 +141,14 @@ services:
       start_period: 10s
     logging: *default-logging
 
+  # Certbot - solo se ejecuta bajo demanda (no como servicio permanente)
   certbot:
     image: certbot/certbot:latest
     container_name: linker-certbot
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
-      - ./nginx/certbot-www:/var/www/certbot
+      - certbot-www:/var/www/certbot
     networks:
       - linker-network
-    # NO exponemos 80 aquí para evitar conflicto; Nginx sirve el webroot
+    logging: *default-logging

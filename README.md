@@ -1,8 +1,12 @@
 # ThreeLinker
 
+Servidor público: https://linker.genodev.com.co/
+
 ThreeLinker es un editor de Three.js con capacidades de colaboración en tiempo real. Es una versión standalone del editor oficial de Three.js que permite a múltiples usuarios trabajar juntos en escenas 3D de forma simultánea.
 
 ![ThreeLinker Editor](images/Captura_1.png)
+
+
 
 ## 🌟 Características Principales
 

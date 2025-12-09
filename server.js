@@ -4,6 +4,7 @@
  * Configuración automática según variables de entorno
  */
 import express from "express";
+import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
@@ -39,6 +40,53 @@ if (PORT === 3001 || INSTANCE_ID === 'server-1') {
 }
 
 const app = express();
+
+// CORS configuration - simplified and unified
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Permitir requests sin origin (como mobile apps o curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Lista de origins permitidos
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:8080',
+      'https://linker.genodev.com.co',
+      'https://*.genodev.com.co'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('🚫 CORS bloqueado para origin:', origin);
+      callback(new Error('No permitido por CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cache-Control',
+    'X-Access-Token'
+  ],
+  exposedHeaders: ['X-Total-Count', 'X-Rate-Limit-Remaining']
+};
+
+
+
+// Middleware para logging de requests (solo en desarrollo)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`📡 ${req.method} ${req.url} - Origin: ${req.headers.origin}`);
+    next();
+  });
+}
+
 const server = createServer(app);
 
 console.log(`🚀 Iniciando ${instanceConfig.INSTANCE_ID} en puerto ${instanceConfig.PORT}`);
@@ -78,13 +126,28 @@ async function setupRedisAdapter() {
   }
 }
 
-// Configurar Socket.IO
+// Configurar Socket.IO con CORS consistente
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "https://linker.genodev.com.co",
-    ],
+    origin: function (origin, callback) {
+      // Permitir requests sin origin
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:8080',
+        'https://linker.genodev.com.co',
+        'https://*.genodev.com.co'
+      ];
+      
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.log('🚫 Socket.IO CORS bloqueado para origin:', origin);
+        callback(new Error('No permitido por CORS'));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -125,6 +188,9 @@ io.use(async (socket, next) => {
 
 // Crear RedisManager compartido
 const redisManager = new RedisManager();
+
+// Aplicar CORS middleware ANTES de static para manejar preflight requests correctamente
+app.use(cors(corsOptions));
 
 // Servir archivos estáticos
 app.use(express.static(__dirname));

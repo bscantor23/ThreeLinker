@@ -10,24 +10,68 @@ class CollaborationManager {
       (window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1");
 
+    console.log('🔍 Debug - Detección de entorno:', {
+      hostname: typeof window !== "undefined" ? window.location.hostname : 'undefined',
+      isLocal,
+      mode: import.meta.env.MODE,
+      viteServerUrl: import.meta.env.VITE_SERVER_URL,
+      origin: typeof window !== "undefined" ? window.location.origin : 'undefined'
+    });
+
     if (serverUrls) {
       this.serverUrls = Array.isArray(serverUrls) ? serverUrls : [serverUrls];
-    } else if (isLocal) {
+      console.log('🔧 Usando URLs proporcionadas:', this.serverUrls);
+    } else if (isLocal || import.meta.env.MODE === 'development') {
       // 🧪 Modo desarrollo: conecta directo a los puertos del backend
+      let devServerUrl = import.meta.env.VITE_SERVER_URL;
+      
+      // Validar si VITE_SERVER_URL es válido (debe tener puerto numérico)
+      if (devServerUrl) {
+        const portMatch = devServerUrl.match(/:(\d+)/);
+        if (!portMatch) {
+          console.warn('⚠️ VITE_SERVER_URL sin puerto válido detectado:', devServerUrl, 'usando fallback');
+          devServerUrl = null;
+        } else {
+          console.log('✅ VITE_SERVER_URL con puerto válido:', devServerUrl);
+        }
+      }
+      
       this.serverUrls = [
-        import.meta.env.VITE_SERVER_URL || "http://localhost:3001",
+        devServerUrl || "http://localhost:3001",
         "http://localhost:3002",
       ];
+      console.log('🧪 Modo desarrollo - URLs configuradas:', this.serverUrls);
     } else {
-      // 🚀 Producción: usa el mismo dominio que sirve el front
+      // 🚀 Producción: verificar si el servidor está disponible antes de usar
       const baseUrl =
         import.meta.env.VITE_SERVER_URL ||
         (typeof window !== "undefined"
           ? window.location.origin
-          : "https://linker.genodev.com.co");
+          : null);
 
-      this.serverUrls = [baseUrl];
+      if (baseUrl && baseUrl.includes('localhost')) {
+        // Si el entorno variable apunta a localhost, usar fallback de desarrollo
+        this.serverUrls = [
+          "http://localhost:3001",
+          "http://localhost:3002",
+        ];
+        console.log('🔧 Detectado servidor local en producción, usando fallback de desarrollo');
+      } else {
+        this.serverUrls = baseUrl ? [baseUrl] : [];
+        console.log('🚀 Modo producción - URLs configuradas:', this.serverUrls);
+      }
     }
+
+    // Verificar que tengamos URLs válidas
+    if (this.serverUrls.length === 0) {
+      console.warn('⚠️ No se encontraron URLs de servidor válidas, usando fallback de desarrollo');
+      this.serverUrls = [
+        "http://localhost:3001",
+        "http://localhost:3002",
+      ];
+    }
+
+    console.log('🌐 URLs de servidor FINAL configuradas:', this.serverUrls);
 
     this.currentServerIndex = 0;
     this.serverUrl = this.serverUrls[0];
@@ -116,7 +160,6 @@ class CollaborationManager {
     }
 
     this.isLoadingRooms = true;
-    this.showNotification("🔄 Actualizando lista de salas...", "info");
 
     try {
       // Obtener salas desde el servidor actual (que debe tener acceso a todas via Redis)
@@ -126,18 +169,17 @@ class CollaborationManager {
         this.unifiedRooms = roomsResponse.rooms || [];
         this.lastRoomsUpdate = now;
         
-        // Actualizar cache y UI
+        // Actualizar cache y UI de forma transparente
         this.updateRoomsCache();
         this.updateAvailableRooms(this.unifiedRooms);
         
-        this.showNotification(`✅ ${this.unifiedRooms.length} salas disponibles`, "success");
         console.log(`📋 Salas obtenidas:`, this.unifiedRooms);
         
         return this.unifiedRooms;
       }
     } catch (error) {
       console.error('Error obteniendo salas unificadas:', error);
-      this.showNotification("⚠️ Error actualizando salas", "warning");
+      // Solo mostrar error en casos críticos, no para updates transparentes
     } finally {
       this.isLoadingRooms = false;
     }
@@ -499,6 +541,23 @@ class CollaborationManager {
         return;
       }
 
+      // Verificar errores específicos de conectividad
+      if (error.message.includes("websocket error") || 
+          error.message.includes("server with the specified hostname could not be found") ||
+          error.message.includes("getaddrinfo ENOTFOUND")) {
+        
+        console.warn(`🌐 Servidor no disponible: ${this.serverUrl}`);
+        this.showConnectionStatus(`Servidor no disponible`, "warning");
+        
+        // Si no estamos en modo desarrollo, mostrar mensaje informativo
+        if (!this.isDevelopmentMode()) {
+          this.showNotification(
+            `🔗 No se puede conectar al servidor. Verifica tu conexión a internet o intenta más tarde.`,
+            "warning"
+          );
+        }
+      }
+
       this.tryNextServer();
     });
 
@@ -531,6 +590,16 @@ class CollaborationManager {
   }
 
   /**
+   * Verifica si estamos en modo desarrollo
+   */
+  isDevelopmentMode() {
+    return import.meta.env.MODE === 'development' || 
+           (typeof window !== "undefined" && 
+            (window.location.hostname === "localhost" ||
+             window.location.hostname === "127.0.0.1"));
+  }
+
+  /**
    * Intentar siguiente servidor en failover
    */
   tryNextServer() {
@@ -541,12 +610,31 @@ class CollaborationManager {
     this.failoverInProgress = true;
     this.connectionAttempts++;
 
-    if (this.connectionAttempts >= this.maxConnectionAttempts) {
+    // Verificar si hemos agotado todos los intentos
+    if (this.connectionAttempts >= this.maxConnectionAttempts * this.serverUrls.length) {
+      console.warn('🚫 Todos los servidores fallaron. Deteniendo intentos de reconexión.');
+      
+      if (!this.isDevelopmentMode()) {
+        this.showNotification(
+          '🔌 No se puede conectar a ningún servidor. Verifica tu conexión o intenta más tarde.',
+          'error'
+        );
+      } else {
+        this.showNotification(
+          '🔌 Servidores de desarrollo no disponibles. Asegúrate de que estén ejecutándose en los puertos 3001 y 3002.',
+          'warning'
+        );
+      }
+      
+      this.failoverInProgress = false;
+      return;
+    }
+
+    if (this.connectionAttempts % this.maxConnectionAttempts === 0) {
       // Intentar siguiente servidor
       this.currentServerIndex =
         (this.currentServerIndex + 1) % this.serverUrls.length;
-      this.connectionAttempts = 0;
-
+      
       console.log(
         `🔄 Failover al servidor ${this.currentServerIndex + 1}: ${
           this.serverUrls[this.currentServerIndex]

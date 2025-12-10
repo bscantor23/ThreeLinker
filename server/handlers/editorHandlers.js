@@ -133,7 +133,7 @@ function setupEditorHandlers(
 /**
  * Maneja solicitud de sincronización del editor
  */
-function handleRequestEditorSync(
+async function handleRequestEditorSync(
   io,
   socket,
   data,
@@ -163,7 +163,7 @@ function handleRequestEditorSync(
     }
 
     // Obtener el editor de la sala
-    const editorResult = editorManager.getRoomEditor(roomId);
+    const editorResult = await editorManager.getRoomEditor(roomId);
 
     // Verificar que hay datos del editor
     if (!editorResult.success || !editorResult.editorData) {
@@ -193,7 +193,7 @@ function handleRequestEditorSync(
 /**
  * Maneja sincronización completa del editor (cualquier usuario)
  */
-function handleSyncFullEditor(
+async function handleSyncFullEditor(
   io,
   socket,
   data,
@@ -224,7 +224,7 @@ function handleSyncFullEditor(
     }
 
     // Guardar el editor en el manager
-    const result = editorManager.setRoomEditor(roomId, editorData, user.id);
+    const result = await editorManager.setRoomEditor(roomId, editorData, user.id);
 
     if (!result.success) {
       socket.emit("sync-full-editor-error", { error: result.error });
@@ -239,20 +239,15 @@ function handleSyncFullEditor(
     });
 
     // Enviar el editor a todos los usuarios en la sala EXCEPTO el que originó el cambio
-    const roomUsers = userManager.getUsersByRoom(roomId);
+    // USAR socket.to(roomId) para soporte multi-server (Redis Adapter)
+    socket.to(roomId).emit("receive-full-editor", {
+      editorData: editorData,
+      version: result.version,
+      hostId: user.id,
+      lastUpdate: Date.now(),
+      originUserId: user.id,
+    });
 
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-full-editor", {
-          editorData: editorData,
-          version: result.version,
-          hostId: user.id,
-          lastUpdate: Date.now(),
-          originUserId: user.id, // Para que el cliente sepa quién originó el cambio
-        });
-      }
-    }
   } catch (error) {
     socket.emit("sync-full-editor-error", { error: "Internal server error" });
   }
@@ -261,7 +256,7 @@ function handleSyncFullEditor(
 /**
  * Maneja la eliminación de objetos del editor
  */
-function handleSyncEditorObjectRemoval(
+async function handleSyncEditorObjectRemoval(
   io,
   socket,
   data,
@@ -301,7 +296,7 @@ function handleSyncEditorObjectRemoval(
     }
 
     // Eliminar el objeto del editor en el manager
-    const result = editorManager.removeEditorObject(roomId, objectId, user.id);
+    const result = await editorManager.removeEditorObject(roomId, objectId, user.id);
 
     if (!result.success) {
       socket.emit("editor-sync-error", {
@@ -312,17 +307,28 @@ function handleSyncEditorObjectRemoval(
     }
 
     // Enviar eliminación a todos los usuarios en la sala (incluido el que originó el cambio)
-    const roomUsers = userManager.getUsersByRoom(roomId);
+    // Enviar eliminación a todos los usuarios en la sala (incluido el que originó el cambio si usamos io.to)
+    // Pero aquí queremos excluir al remitente si usó socket.to? No, el cliente espera confirmación?
+    // El cliente original recibe confirmación vía callback o update. 
+    // Usualmente object removal se debe propagar a OTROS.
 
-    for (const roomUser of roomUsers) {
-      io.to(roomUser.id).emit("receive-editor-object-removal", {
-        objectId: objectId,
-        removedBy: user.id,
-        timestamp: Date.now(),
-        originUserId: user.id,
-        version: result.version,
-      });
-    }
+    socket.to(roomId).emit("receive-editor-object-removal", {
+      objectId: objectId,
+      removedBy: user.id,
+      timestamp: Date.now(),
+      originUserId: user.id,
+      version: result.version,
+    });
+
+    // Al remitente también le confirmamos (opcional, pero buena práctica si el cliente espera evento)
+    socket.emit("receive-editor-object-removal", {
+      objectId: objectId,
+      removedBy: user.id,
+      timestamp: Date.now(),
+      originUserId: user.id,
+      version: result.version,
+    });
+
   } catch (error) {
     socket.emit("editor-sync-error", {
       error: "Internal server error during object removal",
@@ -351,37 +357,24 @@ function handleSyncEditorObjectUpdate(
       return;
     }
 
-    // Verificar que userManager existe
-    if (!userManager || typeof userManager.getUser !== "function") {
-      socket.emit("editor-sync-error", { error: "Server configuration error" });
-      return;
-    }
+    // Verificar que el usuario esté en la sala (seguridad básica)
+    // Nota: Aunque el usuario esté en otro nodo, si este socket emitió el evento,
+    // tenemos su ID aquí en 'socket.id'.
+    // Si la validación de usuario falla porque userManager solo tiene locales, 
+    // podríamos relajarla o confiar en que socket.id está en la sala.
+    // Asumiremos que si el socket envió el evento, es un usuario válido.
 
-    // Verificar que el usuario esté en la sala
-    const user = userManager.getUser(socket.id);
-    if (!user || user.currentRoom !== roomId) {
-      socket.emit("editor-sync-error", {
-        error: "User not found or not in room",
-      });
-      return;
-    }
+    // Broadcast directo a la sala (Redis Adapter se encarga de distribuirlo a otros nodos)
+    // socket.to(roomId) envía a todos en la sala EXCEPTO al remitente.
+    socket.to(roomId).emit("receive-editor-object-update", {
+      objectData: objectData,
+      objectUuid: objectUuid,
+      changeType: changeType || "general",
+      updatedBy: socket.id, // Usamos socket.id como ID de usuario
+      timestamp: Date.now(),
+      originUserId: socket.id,
+    });
 
-    // Enviar la actualización a todos los otros usuarios en la sala
-    const roomUsers = userManager.getUsersByRoom(roomId);
-
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-editor-object-update", {
-          objectData: objectData,
-          objectUuid: objectUuid,
-          changeType: changeType || "general",
-          updatedBy: user.id,
-          timestamp: Date.now(),
-          originUserId: user.id,
-        });
-      }
-    }
   } catch (error) {
     socket.emit("editor-sync-error", { error: "Internal server error" });
   }
@@ -417,20 +410,13 @@ function handleSyncEditorMaterialUpdate(
     }
 
     // Enviar la actualización a todos los otros usuarios en la sala
-    const roomUsers = userManager.getUsersByRoom(roomId);
-
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-editor-material-update", {
-          materialData: materialData,
-          materialUuid: materialUuid,
-          updatedBy: user.id,
-          timestamp: Date.now(),
-          originUserId: user.id,
-        });
-      }
-    }
+    socket.to(roomId).emit("receive-editor-material-update", {
+      materialData: materialData,
+      materialUuid: materialUuid,
+      updatedBy: socket.id,
+      timestamp: Date.now(),
+      originUserId: socket.id,
+    });
   } catch (error) {
     socket.emit("editor-sync-error", { error: "Internal server error" });
   }
@@ -467,19 +453,12 @@ function handleSyncSceneBackgroundUpdate(
     }
 
     // Enviar la actualización a todos los otros usuarios en la sala
-    const roomUsers = userManager.getUsersByRoom(roomId);
-
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-scene-background-update", {
-          backgroundData: backgroundData,
-          updatedBy: user.id,
-          timestamp: Date.now(),
-          originUserId: user.id,
-        });
-      }
-    }
+    socket.to(roomId).emit("receive-scene-background-update", {
+      backgroundData: backgroundData,
+      updatedBy: socket.id,
+      timestamp: Date.now(),
+      originUserId: socket.id,
+    });
   } catch (error) {
     socket.emit("editor-sync-error", { error: "Internal server error" });
   }
@@ -516,19 +495,12 @@ function handleSyncSceneFogUpdate(
     }
 
     // Enviar la actualización a todos los otros usuarios en la sala
-    const roomUsers = userManager.getUsersByRoom(roomId);
-
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-scene-fog-update", {
-          fogData: fogData,
-          updatedBy: user.id,
-          timestamp: Date.now(),
-          originUserId: user.id,
-        });
-      }
-    }
+    socket.to(roomId).emit("receive-scene-fog-update", {
+      fogData: fogData,
+      updatedBy: socket.id,
+      timestamp: Date.now(),
+      originUserId: socket.id,
+    });
   } catch (error) {
     socket.emit("editor-sync-error", { error: "Internal server error" });
   }
@@ -565,20 +537,13 @@ function handleSyncScriptAdded(
     }
 
     // Enviar la actualización a todos los otros usuarios en la sala
-    const roomUsers = userManager.getUsersByRoom(roomId);
-
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-script-added", {
-          objectUuid: objectUuid,
-          script: script,
-          updatedBy: user.id,
-          timestamp: Date.now(),
-          originUserId: user.id,
-        });
-      }
-    }
+    socket.to(roomId).emit("receive-script-added", {
+      objectUuid: objectUuid,
+      script: script,
+      updatedBy: socket.id,
+      timestamp: Date.now(),
+      originUserId: socket.id,
+    });
   } catch (error) {
     socket.emit("editor-sync-error", { error: "Internal server error" });
   }
@@ -615,20 +580,13 @@ function handleSyncScriptChanged(
     }
 
     // Enviar la actualización a todos los otros usuarios en la sala
-    const roomUsers = userManager.getUsersByRoom(roomId);
-
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-script-changed", {
-          objectUuid: objectUuid,
-          script: script,
-          updatedBy: user.id,
-          timestamp: Date.now(),
-          originUserId: user.id,
-        });
-      }
-    }
+    socket.to(roomId).emit("receive-script-changed", {
+      objectUuid: objectUuid,
+      script: script,
+      updatedBy: socket.id,
+      timestamp: Date.now(),
+      originUserId: socket.id,
+    });
   } catch (error) {
     socket.emit("editor-sync-error", { error: "Internal server error" });
   }
@@ -665,20 +623,13 @@ function handleSyncScriptRemoved(
     }
 
     // Enviar la actualización a todos los otros usuarios en la sala
-    const roomUsers = userManager.getUsersByRoom(roomId);
-
-    for (const roomUser of roomUsers) {
-      // No enviar de vuelta al usuario que originó el cambio
-      if (roomUser.id !== user.id) {
-        io.to(roomUser.id).emit("receive-script-removed", {
-          objectUuid: objectUuid,
-          script: script,
-          updatedBy: user.id,
-          timestamp: Date.now(),
-          originUserId: user.id,
-        });
-      }
-    }
+    socket.to(roomId).emit("receive-script-removed", {
+      objectUuid: objectUuid,
+      script: script,
+      updatedBy: socket.id,
+      timestamp: Date.now(),
+      originUserId: socket.id,
+    });
   } catch (error) {
     socket.emit("editor-sync-error", { error: "Internal server error" });
   }

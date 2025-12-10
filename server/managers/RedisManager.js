@@ -296,6 +296,151 @@ class RedisManager {
     }
   }
 
+  // ===== GESTIÓN DE SALUD (HEARTBEAT) =====
+
+  /**
+   * Envía un heartbeat para indicar que esta instancia está viva
+   */
+  async sendHeartbeat(instanceId) {
+    if (this.isConnected && !this.fallbackToMemory && instanceId) {
+      try {
+        const key = `linker:heartbeat:${instanceId}`;
+        // TTL de 30 segundos (si no se actualiza en 30s, se asume muerto)
+        await this.redis.set(key, Date.now(), 'EX', 30);
+      } catch (error) {
+        // Silencioso para no saturar logs
+      }
+    }
+  }
+
+  /**
+   * Identifica servidores muertos (heartbeats expirados)
+   * @returns {Promise<Array<string>>} Lista de IDs de servidores muertos quitando los vivos
+   */
+  async getDeadServers(knownInstances) {
+    if (!this.isConnected || this.fallbackToMemory) return [];
+
+    const deadServers = [];
+
+    // Si no conocemos instancias, intentamos deducir de las salas
+    if (!knownInstances || knownInstances.length === 0) {
+      const allRooms = await this.getAllGlobalRooms();
+      const instances = new Set(allRooms.map(r => r.serverInstance));
+      knownInstances = Array.from(instances).filter(id => id && id !== 'local' && id !== 'undefined');
+    }
+
+    for (const instanceId of knownInstances) {
+      try {
+        const key = `linker:heartbeat:${instanceId}`;
+        const heartbeat = await this.redis.get(key);
+
+        if (!heartbeat) {
+          deadServers.push(instanceId);
+        }
+      } catch (error) {
+        // Error leyendo heartbeat, ignorar
+      }
+    }
+
+    return deadServers;
+  }
+
+  /**
+   * Limpia salas zombies (servidores muertos o metadata corrupta)
+   */
+  async cleanZombieRooms() {
+    console.log('[RedisManager] 🧟 Starting Zombie Room Cleanup...');
+    const key = 'global:rooms';
+    let cleanedCount = 0;
+
+    if (!this.isConnected || this.fallbackToMemory) {
+      console.warn('[RedisManager] Cannot clean zombies: Redis not connected');
+      return 0;
+    }
+
+    try {
+      const roomsHash = await this.redis.hgetall(key);
+      const allRooms = [];
+      const instancesSet = new Set();
+
+      // 1. Recolectar todas las salas e instancias
+      for (const [roomId, roomDataStr] of Object.entries(roomsHash)) {
+        try {
+          const room = JSON.parse(roomDataStr);
+          allRooms.push(room);
+          if (room.serverInstance && room.serverInstance !== 'local') {
+            instancesSet.add(room.serverInstance);
+          }
+        } catch (e) {
+          // Metadata corrupta -> Eliminar
+          console.warn(`[RedisManager] 🗑 Removing corrupt room data: ${roomId}`);
+          await this.redis.hdel(key, roomId);
+          cleanedCount++;
+        }
+      }
+
+      // 2. Identificar servidores muertos
+      const deadServers = await this.getDeadServers(Array.from(instancesSet));
+
+      if (deadServers.length > 0) {
+        console.log(`[RedisManager] 💀 Dead servers detected: ${deadServers.join(', ')}`);
+      }
+
+      // 3. Eliminar salas de servidores muertos o expiradas
+      const oneHourAgo = Date.now() - (60 * 60 * 1000);
+
+      for (const room of allRooms) {
+        let shouldDelete = false;
+        let reason = '';
+
+        // Criterio A: Servidor muerto
+        if (deadServers.includes(room.serverInstance)) {
+          shouldDelete = true;
+          reason = `Dead server (${room.serverInstance})`;
+        }
+        // Criterio B: Actividad expirada y sin usuarios (zombie clásico)
+        else if (room.userCount === 0 && room.lastActivity < oneHourAgo) {
+          shouldDelete = true;
+          reason = 'Inactivity (0 users > 1h)';
+        }
+        // Criterio C: Metadata incompleta obligatoria
+        else if (!room.id || !room.host) {
+          shouldDelete = true;
+          reason = 'Invalid metadata';
+        }
+
+        if (shouldDelete) {
+          console.log(`[RedisManager] 🧹 Removing zombie room ${room.id} (${room.serverInstance || '?'}). Reason: ${reason}`);
+
+          // Eliminar de lista global
+          await this.redis.hdel(key, room.id);
+
+          // Eliminar clave de sala
+          await this.redis.del(`linker:room:${room.id}`);
+
+          // Publicar evento para que otros limpien cache local si es necesario
+          await this.publish('linker:events:rooms', {
+            type: 'ROOM_DELETED',
+            roomId: room.id
+          });
+
+          cleanedCount++;
+        }
+      }
+
+    } catch (error) {
+      console.error('[RedisManager] Error during zombie cleanup:', error);
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`[RedisManager] ✅ Zombie cleanup finished. Removed ${cleanedCount} rooms.`);
+    } else {
+      console.log('[RedisManager] ✅ Zombie cleanup finished. No zombies found.');
+    }
+
+    return cleanedCount;
+  }
+
   // ===== GESTIÓN GLOBAL DE SALAS =====
 
   /**
@@ -303,6 +448,11 @@ class RedisManager {
    */
   async addRoomToGlobalList(roomId, roomData) {
     const key = 'global:rooms';
+    const serverInstance = process.env.INSTANCE_ID || 'unknown';
+
+    // Debug log
+    console.log(`[RedisManager] Registering room ${roomId} on instance: ${serverInstance}`);
+
     const roomInfo = {
       id: roomId,
       host: roomData.host,
@@ -311,7 +461,7 @@ class RedisManager {
       lastActivity: Date.now(),
       createdAt: roomData.createdAt || Date.now(),
       isProtected: roomData.isProtected || false,
-      serverInstance: process.env.INSTANCE_ID || 'unknown'
+      serverInstance: serverInstance
     };
 
     await this.hset(key, roomId, roomInfo, 86400); // TTL 24 horas
@@ -441,6 +591,52 @@ class RedisManager {
       logServerEvent('GLOBAL_ROOMS_CLEANUP', null, { cleanedCount });
     }
 
+    return cleanedCount;
+  }
+
+  /**
+   * Elimina salas asociadas a una instancia específica de servidor
+   * Útil para limpiar "residuos" al reiniciar un servidor específico
+   */
+  async cleanupRoomsByInstance(instanceId) {
+    if (!instanceId) return 0;
+    const key = 'global:rooms';
+    let cleanedCount = 0;
+    let foundCount = 0;
+
+    console.log(`[RedisManager] Starting cleanup for instance: ${instanceId}`);
+
+    if (this.isConnected && !this.fallbackToMemory) {
+      try {
+        const roomsHash = await this.redis.hgetall(key);
+        foundCount = Object.keys(roomsHash).length;
+
+        for (const [roomId, roomDataStr] of Object.entries(roomsHash)) {
+          try {
+            const roomData = JSON.parse(roomDataStr);
+            // Relax check: debug log what we find
+            // console.log(`[RedisManager] Checking room ${roomId}: serverInstance=${roomData.serverInstance}`);
+
+            if (roomData.serverInstance === instanceId) {
+              await this.redis.hdel(key, roomId);
+              // También limpiar la clave principal de la sala
+              await this.redis.del(`linker:room:${roomId}`);
+              cleanedCount++;
+            }
+          } catch (e) {
+            // Ignorar errores de parseo
+          }
+        }
+      } catch (error) {
+        logServerEvent('CLEANUP_INSTANCE_ROOMS_ERROR', null, { instanceId, error: error.message });
+      }
+    }
+
+    console.log(`[RedisManager] Cleanup finished. Found ${foundCount} rooms, deleted ${cleanedCount} belonging to ${instanceId}`);
+
+    if (cleanedCount > 0) {
+      logServerEvent('INSTANCE_CLEANUP', null, { instanceId, cleanedCount });
+    }
     return cleanedCount;
   }
 

@@ -46,7 +46,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Permitir requests sin origin (como mobile apps o curl requests)
     if (!origin) return callback(null, true);
-    
+
     // Lista de origins permitidos
     const allowedOrigins = [
       'http://localhost:5173',
@@ -55,7 +55,7 @@ const corsOptions = {
       'https://linker.genodev.com.co',
       'https://*.genodev.com.co'
     ];
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -106,7 +106,7 @@ async function setupRedisAdapter() {
     if (ENV_CONFIG.REDIS_PASSWORD) {
       redisUrl.replace('redis://', `redis://:${ENV_CONFIG.REDIS_PASSWORD}@`);
     }
-    
+
     const pubClient = createClient({
       url: redisUrl,
       db: ENV_CONFIG.REDIS_DB
@@ -118,7 +118,7 @@ async function setupRedisAdapter() {
     await subClient.connect();
 
     console.log(`✅ Redis Adapter conectado para ${instanceConfig.INSTANCE_ID}`);
-    
+
     return createAdapter(pubClient, subClient);
   } catch (error) {
     console.warn(`⚠️  Redis Adapter falló para ${instanceConfig.INSTANCE_ID}, continuando sin adapter:`, error.message);
@@ -132,7 +132,7 @@ const io = new Server(server, {
     origin: function (origin, callback) {
       // Permitir requests sin origin
       if (!origin) return callback(null, true);
-      
+
       const allowedOrigins = [
         'http://localhost:5173',
         'http://localhost:3000',
@@ -140,7 +140,7 @@ const io = new Server(server, {
         'https://linker.genodev.com.co',
         'https://*.genodev.com.co'
       ];
-      
+
       if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
@@ -170,19 +170,19 @@ setupRedisAdapter().then(adapter => {
 // Middleware para sticky sessions por roomId
 io.use(async (socket, next) => {
   const roomId = socket.handshake.query.roomId;
-  
+
   if (roomId) {
     // Verificar si este servidor debe manejar esta sala
     const targetServer = LOAD_BALANCER_CONFIG.getServerForRoom(roomId);
-    
+
     if (targetServer.port !== instanceConfig.PORT) {
       console.log(`🔄 Redirigiendo sala ${roomId} de ${instanceConfig.INSTANCE_ID} a ${targetServer.id}`);
       return next(new Error(`REDIRECT:${targetServer.url}`));
     }
-    
+
     console.log(`✅ ${instanceConfig.INSTANCE_ID} manejará sala ${roomId}`);
   }
-  
+
   next();
 });
 
@@ -202,7 +202,7 @@ const collaboration = setupCollaborationServer(io, redisManager);
 app.get(instanceConfig.HEALTH_ENDPOINT, (req, res) => {
   const health = collaboration.utils.getHealth();
   const redisStats = redisManager.getStats();
-  
+
   res.json({
     ...health,
     instance: instanceConfig.INSTANCE_ID,
@@ -251,7 +251,7 @@ app.get('/api/all-rooms', async (req, res) => {
       servers: LOAD_BALANCER_CONFIG.SERVERS,
       algorithm: 'roomId hash'
     };
-    
+
     res.json({
       success: true,
       rooms: activeRooms,
@@ -293,6 +293,19 @@ app.get('/api/instance', (req, res) => {
   });
 });
 
+// Heartbeat Loop (cada 10s)
+setInterval(() => {
+  redisManager.sendHeartbeat(instanceConfig.INSTANCE_ID);
+}, 10000);
+
+// Periodic Cleanup Job (cada 5 min)
+// Solo el servidor en puerto 3001 (o líder designado) debería correr esto para evitar redundancia,
+// pero por redundancia no hace daño que corran ambos si el lock es optimista.
+// Para simplificar, ambos limpiarán su propia percepción de zombies.
+setInterval(() => {
+  redisManager.cleanZombieRooms();
+}, 5 * 60 * 1000);
+
 // Iniciar servidor
 server.listen(instanceConfig.PORT, () => {
   console.log(`🌟 ${instanceConfig.INSTANCE_ID} ejecutándose en http://localhost:${instanceConfig.PORT}`);
@@ -301,10 +314,10 @@ server.listen(instanceConfig.PORT, () => {
   console.log(`📈 Estadísticas: http://localhost:${instanceConfig.PORT}/api/stats`);
   console.log(`🔄 Load balancer info: http://localhost:${instanceConfig.PORT}/api/load-balancer`);
   console.log(`ℹ️  Instance info: http://localhost:${instanceConfig.PORT}/api/instance`);
-  
+
   console.log("Módulos cargados:", {
     redisManager: "✓",
-    socketAdapter: "✓", 
+    socketAdapter: "✓",
     collaboration: "✓",
     instanceConfig: "✓"
   });
@@ -321,7 +334,7 @@ io.engine.on("connection_error", (err) => {
 // Manejar cierre limpio del servidor
 const shutdown = async () => {
   console.log(`\n🔄 Cerrando ${instanceConfig.INSTANCE_ID}...`);
-  
+
   try {
     await collaboration.shutdown();
     await redisManager.shutdown();

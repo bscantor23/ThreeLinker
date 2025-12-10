@@ -216,6 +216,29 @@ class RoomManager {
       role: "guest",
     };
 
+    // DEDUPLICACIÓN DE USUARIOS (Fix Failover bugs):
+    // Verificar si ya existe un usuario con el mismo nombre (sesión zombie tras crash)
+    for (const [existingId, existingUser] of room.users.entries()) {
+      if (existingUser.name === userName) {
+        console.log(`[RoomManager] Found stale session for user ${userName} (${existingId}). Replacing with new session (${userId}).`);
+
+        // Si el usuario anterior era HOST, transferir el rol
+        if (room.host === existingId) {
+          console.log(`[RoomManager] Transferring HOST role from ${existingId} to ${userId}`);
+          room.host = userId;
+          userData.role = "host";
+        }
+
+        // Eliminar sesión anterior
+        room.users.delete(existingId);
+
+        // Limpiar referencia en Redis para el socket viejo
+        this.redis.del(`${this.userRoomPrefix}${existingId}`).catch(err =>
+          console.error('Error cleaning up stale user redis key:', err)
+        );
+      }
+    }
+
     // Actualizar tanto local como Redis
     room.users.set(userId, userData);
 
@@ -261,7 +284,15 @@ class RoomManager {
     room.users.delete(userId);
     this.updateRoomActivity(roomId);
 
-    // Si la sala queda vacía, eliminarla
+    // CRITICAL: Si el HOST sale, la sala se destruye automáticamente
+    // (Requested feature: "eliminar automáticamente sala si host no está")
+    if (userId === room.hostId) {
+      console.log(`[RoomManager] Host ${userId} left room ${roomId}. Destroying room.`);
+      this.deleteRoom(roomId);
+      return userData;
+    }
+
+    // Si la sala queda vacía, eliminarla (redundante si era host, pero util si era guest)
     if (room.users.size === 0) {
       this.deleteRoom(roomId);
     }

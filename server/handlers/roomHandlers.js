@@ -142,8 +142,10 @@ export function setupRoomHandlers(
       // Unir al socket a la sala
       socket.join(roomId);
 
+      console.log(`[${process.env.INSTANCE_ID || 'server'}] 👤 User ${sanitizedUserName} (${socket.id}) JOINED room ${roomId}`);
+
       // Agregar usuario a la sala
-      roomManager.addUserToRoom(roomId, socket.id, sanitizedUserName);
+      await roomManager.addUserToRoom(roomId, socket.id, sanitizedUserName);
 
       // Actualizar información del usuario
       userManager.updateUserRoom(socket.id, roomId, "guest");

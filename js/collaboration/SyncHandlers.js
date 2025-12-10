@@ -552,6 +552,18 @@ class SyncHandlers {
       }
 
       // Execute load
+      // DEDUPLICACIÓN DE ELEMENTOS: Limpiar escena antes de cargar
+      // Esto previene que se dupliquen objetos al reconectar (failover)
+      if (this.editor.clear) {
+        this.editor.clear();
+      } else {
+        // Fallback si no existe método clear() explícito en el Editor
+        while (this.editor.scene.children.length > 0) {
+          const child = this.editor.scene.children[0];
+          this.editor.removeObject(child); // Usa removeObject para disparar señales si es necesario
+        }
+      }
+
       await this.editor.fromJSON(editorData);
 
       this.editor.signals.sceneGraphChanged.dispatch();

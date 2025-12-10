@@ -569,7 +569,8 @@ function updateAvailableRooms(
   roomInput
 ) {
   // Debug log
-  console.log('Renderizando salas:', rooms.length, '| DOM Connected:', roomsList.dom.isConnected);
+  // Debug log removed
+
 
   // Limpiar lista actual
   roomsList.dom.innerHTML = "";
@@ -580,7 +581,8 @@ function updateAvailableRooms(
     emptyMsg.className = "empty-message fade-in";
     emptyMsg.textContent = "No hay salas disponibles";
     roomsList.dom.appendChild(emptyMsg);
-    console.log('Renderizado: Mensaje vacío');
+    // console.log('Renderizado: Mensaje vacío');
+
     return;
   }
 

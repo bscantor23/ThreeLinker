@@ -2,23 +2,30 @@
  * EditorManager - Gestiona la sincronización de datos del Editor Three.js entre usuarios
  */
 class EditorManager {
-  constructor() {
-    this.roomEditors = new Map(); // roomId -> editorData
-    this.editorVersions = new Map(); // roomId -> version number
+  constructor(redisManager) {
+    this.redisManager = redisManager;
+    this.roomEditors = new Map(); // Cache local: roomId -> editorData
+    this.editorVersions = new Map(); // Cache local: roomId -> version number
+    this.keyPrefix = "editor:"; // Prefijo para Redis
   }
 
   /**
    * Almacena los datos completos del Editor de una sala
    */
-  setRoomEditor(roomId, editorData, hostId) {
+  async setRoomEditor(roomId, editorData, hostId) {
     try {
       // Validar que el editorData sea válido
       if (!editorData || typeof editorData !== "object") {
         throw new Error("Editor data must be a valid object");
       }
 
-      // Incrementar versión del editor
-      const currentVersion = this.editorVersions.get(roomId) || 0;
+      // Obtener versión actual (de memoria o Redis)
+      let currentVersion = this.editorVersions.get(roomId) || 0;
+      if (currentVersion === 0 && this.redisManager) {
+        const stored = await this.redisManager.get(`${this.keyPrefix}${roomId}`);
+        if (stored) currentVersion = stored.version;
+      }
+
       const newVersion = currentVersion + 1;
 
       const editorInfo = {
@@ -28,11 +35,24 @@ class EditorManager {
         version: newVersion,
       };
 
+      // 1. Actualizar memoria local
       this.roomEditors.set(roomId, editorInfo);
       this.editorVersions.set(roomId, newVersion);
 
+      // 2. Sincronizar con Redis (si está disponible)
+      if (this.redisManager) {
+        // Guardar estado completo. Nota: Para escenas muy grandes esto puede ser pesado.
+        // Idealmente usaríamos JSON.stringify, pero redisManager.set ya lo maneja si es objeto.
+        await this.redisManager.set(
+          `${this.keyPrefix}${roomId}`,
+          editorInfo,
+          24 * 60 * 60 // TTL 24 horas
+        );
+      }
+
       return { success: true, version: newVersion };
     } catch (error) {
+      console.error("[EditorManager] Error setting room editor:", error);
       return { success: false, error: error.message };
     }
   }
@@ -40,8 +60,24 @@ class EditorManager {
   /**
    * Obtiene los datos completos del Editor de una sala
    */
-  getRoomEditor(roomId) {
-    const editorInfo = this.roomEditors.get(roomId);
+  async getRoomEditor(roomId) {
+    // 1. Intentar desde memoria local primero (para velocidad)
+    let editorInfo = this.roomEditors.get(roomId);
+
+    // 2. Si no está en memoria, intentar desde Redis
+    if (!editorInfo && this.redisManager) {
+      try {
+        editorInfo = await this.redisManager.get(`${this.keyPrefix}${roomId}`);
+        if (editorInfo) {
+          // Hidratar caché local
+          this.roomEditors.set(roomId, editorInfo);
+          this.editorVersions.set(roomId, editorInfo.version);
+        }
+      } catch (err) {
+        console.error("[EditorManager] Error fetching from Redis:", err);
+      }
+    }
+
     if (!editorInfo) {
       return { success: false, error: "No editor data found for this room" };
     }
@@ -58,15 +94,31 @@ class EditorManager {
   /**
    * Verifica si una sala tiene datos del Editor
    */
-  hasRoomEditor(roomId) {
-    return this.roomEditors.has(roomId);
+  async hasRoomEditor(roomId) {
+    if (this.roomEditors.has(roomId)) return true;
+    if (this.redisManager) {
+      const exists = await this.redisManager.get(`${this.keyPrefix}${roomId}`);
+      return !!exists;
+    }
+    return false;
   }
 
   /**
    * Obtiene la versión actual del Editor de una sala
    */
-  getEditorVersion(roomId) {
-    return this.editorVersions.get(roomId) || 0;
+  /**
+   * Obtiene la versión actual del Editor de una sala
+   */
+  async getEditorVersion(roomId) {
+    let version = this.editorVersions.get(roomId);
+    if (version === undefined && this.redisManager) {
+      const info = await this.redisManager.get(`${this.keyPrefix}${roomId}`);
+      if (info) {
+        version = info.version;
+        this.editorVersions.set(roomId, version);
+      }
+    }
+    return version || 0;
   }
 
   /**
@@ -81,20 +133,32 @@ class EditorManager {
   /**
    * Elimina un objeto del Editor usando formato Editor.toJSON()
    */
-  removeEditorObject(roomId, objectUuid) {
+  /**
+   * Elimina un objeto del Editor usando formato Editor.toJSON()
+   */
+  async removeEditorObject(roomId, objectUuid) {
     try {
+      // 1. Intentar obtener de memoria primero, luego Redis
+      await this.getRoomEditor(roomId); // Esto hidrata la caché si es necesario
+
       const editorInfo = this.roomEditors.get(roomId);
       if (!editorInfo) {
         return { success: false, error: "No editor found for this room" };
       }
 
-      // Verificar que el editor tenga el formato correcto
-      if (!editorInfo.data.scene?.object?.children) {
-        return { success: false, error: "Editor data format is invalid" };
+      // Validar estructura básica pero ser flexible con children
+      if (!editorInfo.data.scene?.object) {
+        // Solo si falta la estructura principal reportamos error
+        return { success: false, error: "Editor data scene structure is invalid" };
       }
+
+      // Si no hay children, asumimos arreglo vacío (escena vacía)
+      const rootChildren = editorInfo.data.scene.object.children || [];
 
       // Función recursiva para buscar y eliminar el objeto por UUID
       const removeObjectFromHierarchy = (objects, targetUuid) => {
+        if (!objects || !Array.isArray(objects)) return false;
+
         for (let i = 0; i < objects.length; i++) {
           if (objects[i].uuid === targetUuid) {
             // Eliminar el objeto encontrado
@@ -114,16 +178,25 @@ class EditorManager {
 
       // Intentar eliminar el objeto de la jerarquía de la escena
       const removed = removeObjectFromHierarchy(
-        editorInfo.data.scene.object.children,
+        rootChildren,
         objectUuid
       );
 
       // Incrementar versión solo si se eliminó algo
       if (removed) {
-        const newVersion = (this.editorVersions.get(roomId) || 0) + 1;
+        const newVersion = (await this.getEditorVersion(roomId)) + 1;
         editorInfo.version = newVersion;
         editorInfo.lastUpdate = Date.now();
         this.editorVersions.set(roomId, newVersion);
+
+        // Sincronizar actualización con Redis
+        if (this.redisManager) {
+          await this.redisManager.set(
+            `${this.keyPrefix}${roomId}`,
+            editorInfo,
+            24 * 60 * 60
+          );
+        }
       }
 
       return { success: true, version: editorInfo.version, removed: removed };

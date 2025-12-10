@@ -26,6 +26,18 @@ export function setupCollaborationServer(io, redisManager = null) {
   const userManager = new UserManager(redisManager);
   const editorManager = new EditorManager(redisManager);
 
+  // Limpieza inicial: Eliminar salas "zombies" que quedaron de una ejecución anterior de ESTE servidor
+  if (redisManager) {
+    const instanceId = process.env.INSTANCE_ID;
+    if (instanceId) {
+      redisManager.cleanupRoomsByInstance(instanceId).then(count => {
+        if (count > 0) {
+          console.log(`[Startup] 🧹 Cleaned ${count} stale rooms from previous ${instanceId} session`);
+        }
+      });
+    }
+  }
+
   logServerEvent("info", "Collaboration Server starting...", {
     modules: ["RoomManager", "UserManager", "EditorManager", "SocketHandlers"],
   });
@@ -40,7 +52,7 @@ export function setupCollaborationServer(io, redisManager = null) {
       userAgent: socket.handshake.headers["user-agent"]?.substring(0, 50),
     });
 
-        // Configurar event handlers
+    // Configurar event handlers
     setupUserHandlers(socket, io, roomManager, userManager);
     setupRoomHandlers(socket, io, roomManager, userManager, editorManager);
     setupEditorHandlers(socket, io, roomManager, userManager, editorManager);
@@ -54,7 +66,7 @@ export function setupCollaborationServer(io, redisManager = null) {
   // Configurar limpieza automática de recursos (cada 5 minutos)
   const cleanupInterval = setInterval(async () => {
     const report = cleanupServerResources(roomManager, userManager, io);
-    
+
     // Limpiar también salas inactivas de la lista global
     if (redisManager) {
       try {
@@ -64,7 +76,7 @@ export function setupCollaborationServer(io, redisManager = null) {
         logServerEvent("GLOBAL_CLEANUP_ERROR", null, { error: error.message });
       }
     }
-    
+
     if (report.cleanedUsers > 0 || report.cleanedGlobalRooms > 0) {
       logServerEvent("AUTO_CLEANUP", null, report);
     }
@@ -87,12 +99,12 @@ export function setupCollaborationServer(io, redisManager = null) {
     };
   };
 
-    // Función para limpiar recursos manualmente
+  // Función para limpiar recursos manualmente
   const cleanup = () => {
     const cleanedUsers = userManager.cleanupInactiveUsers();
     const cleanedRooms = roomManager.cleanupEmptyRooms();
     const cleanedEditors = editorManager.cleanupOldEditors();
-    
+
     return {
       cleanedUsers,
       cleanedRooms,

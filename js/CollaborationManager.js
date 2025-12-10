@@ -103,7 +103,7 @@ class CollaborationManager {
     // Control de failover mejorado
     this.failoverInProgress = false;
     this.connectionAttempts = 0;
-    this.maxConnectionAttempts = 3;
+    this.maxConnectionAttempts = 1;
     this.connectionTimeout = 8000; // 8 segundos
 
     // Cache y listado unificado de salas
@@ -310,106 +310,14 @@ class CollaborationManager {
   /**
    * Obtiene servidor óptimo para una sala específica
    */
-  getOptimalServerForRoom(roomId) {
-    if (!roomId) return this.serverUrls[0];
+  // getOptimalServerForRoom removed (legacy hash logic)
 
-    // Usar hash consistente para sticky routing
-    let hash = 0;
-    for (let i = 0; i < roomId.length; i++) {
-      const char = roomId.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-
-    const serverIndex = Math.abs(hash) % this.serverUrls.length;
-    return this.serverUrls[serverIndex];
-  }
 
   /**
    * Método mejorado para crear sala con failover transparente
    */
-  createRoom(roomId, password = null) {
-    if (!this.isConnected) {
-      this.showNotification("No conectado al servidor", "error");
-      return;
-    }
+  // Legacy createRoom/joinRoom removed from here. Using main definitions below.
 
-    if (this.currentRoom) {
-      this.showNotification(
-        `Ya te encuentras vinculado en la sala "${this.currentRoom}".`,
-        "error"
-      );
-      return;
-    }
-
-    // Mostrar mensaje informativo durante la transición
-    this.showLoadingMessage("🌟 Creando sala con servidor optimizado...");
-
-    // Determinar servidor óptimo para la sala
-    const optimalServerUrl = this.getOptimalServerForRoom(roomId);
-    const currentServerUrl = this.serverUrls[this.currentServerIndex];
-
-    if (optimalServerUrl !== currentServerUrl) {
-      console.log(`🎯 Cambiando a servidor óptimo para crear sala ${roomId}: ${optimalServerUrl}`);
-
-      // Cambiar al servidor óptimo
-      const targetServerIndex = this.serverUrls.indexOf(optimalServerUrl);
-      if (targetServerIndex !== -1) {
-        this.currentServerIndex = targetServerIndex;
-        this.performServerSwitch(optimalServerUrl, () => {
-          this._createRoomDirect({ roomId, password, userName: this.userName });
-        });
-        return;
-      }
-    }
-
-    // Crear directamente en el servidor actual
-    this._createRoomDirect({ roomId, password, userName: this.userName });
-  }
-
-  /**
-   * Método mejorado para unirse a sala con failover transparente
-   */
-  joinRoom(roomId, password = null) {
-    if (!this.isConnected) {
-      this.showNotification("No conectado al servidor", "error");
-      return;
-    }
-
-    if (this.currentRoom) {
-      const action = this.isHost ? "elimina" : "sal de";
-      this.showNotification(
-        `Ya estás en la sala "${this.currentRoom}". ${action.charAt(0).toUpperCase() + action.slice(1)
-        } la sala actual primero.`,
-        "error"
-      );
-      return;
-    }
-
-    // Mostrar mensaje informativo durante la transición
-    this.showLoadingMessage("🔗 Conectando a sala con servidor optimizado...");
-
-    // Determinar servidor óptimo para la sala
-    const optimalServerUrl = this.getOptimalServerForRoom(roomId);
-    const currentServerUrl = this.serverUrls[this.currentServerIndex];
-
-    if (optimalServerUrl !== currentServerUrl) {
-      console.log(`🎯 Cambiando a servidor óptimo para sala ${roomId}: ${optimalServerUrl}`);
-
-      // Cambiar al servidor óptimo
-      const targetServerIndex = this.serverUrls.indexOf(optimalServerUrl);
-      if (targetServerIndex !== -1) {
-        this.currentServerIndex = targetServerIndex;
-        this.performServerSwitch(optimalServerUrl, () => {
-          this._joinRoomDirect({ roomId, password, userName: this.userName });
-        });
-        return;
-      }
-    }
-
-    // Unirse directamente en el servidor actual
-    this._joinRoomDirect({ roomId, password, userName: this.userName });
-  }
 
   /**
    * Realiza cambio de servidor con UX mejorada
@@ -560,7 +468,7 @@ class CollaborationManager {
         error.message.includes("getaddrinfo ENOTFOUND")) {
 
         console.warn(`🌐 Servidor no disponible: ${this.serverUrl}`);
-        this.showConnectionStatus(`Servidor no disponible`, "warning");
+        this.showConnectionStatus(`Reconectando...`, "info");
 
         // Si no estamos en modo desarrollo, mostrar mensaje informativo
         if (!this.isDevelopmentMode()) {
@@ -578,7 +486,7 @@ class CollaborationManager {
       this.isConnected = false;
       console.warn(`🔌 Desconectado de ${this.serverUrl}. Razón: ${reason}`);
 
-      if (reason === "io server disconnect" || reason === "transport close") {
+      if (reason === "io server disconnect" || reason === "transport close" || reason === "transport error" || reason === "ping timeout") {
         this.tryNextServer();
       }
     });
@@ -623,25 +531,7 @@ class CollaborationManager {
     this.failoverInProgress = true;
     this.connectionAttempts++;
 
-    // Verificar si hemos agotado todos los intentos
-    if (this.connectionAttempts >= this.maxConnectionAttempts * this.serverUrls.length) {
-      console.warn('🚫 Todos los servidores fallaron. Deteniendo intentos de reconexión.');
 
-      if (!this.isDevelopmentMode()) {
-        this.showNotification(
-          '🔌 No se puede conectar a ningún servidor. Verifica tu conexión o intenta más tarde.',
-          'error'
-        );
-      } else {
-        this.showNotification(
-          '🔌 Servidores de desarrollo no disponibles. Asegúrate de que estén ejecutándose en los puertos 3001 y 3002.',
-          'warning'
-        );
-      }
-
-      this.failoverInProgress = false;
-      return;
-    }
 
     if (this.connectionAttempts % this.maxConnectionAttempts === 0) {
       // Intentar siguiente servidor
@@ -655,29 +545,20 @@ class CollaborationManager {
     }
 
     // Reconectar después de un delay
+    // Si estamos en los primeros intentos (probando cada servidor una vez), hacerlo rápido
+    const delay = this.connectionAttempts <= this.serverUrls.length ? 100 : 2000;
+
     setTimeout(() => {
       this.failoverInProgress = false;
       this.connectToServer();
-    }, 2000);
+    }, delay);
   }
 
   /**
    * Calcular servidor óptimo por roomId para sticky routing
    */
-  getServerForRoomId(roomId) {
-    if (!roomId) return this.serverUrls[0];
+  // getServerForRoomId removed (legacy hash logic)
 
-    // Hash simple para distribución consistente
-    let hash = 0;
-    for (let i = 0; i < roomId.length; i++) {
-      const char = roomId.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-
-    const serverIndex = Math.abs(hash) % this.serverUrls.length;
-    return this.serverUrls[serverIndex];
-  }
 
   /**
    * Inicializa el sincronizador de escenas
@@ -732,14 +613,33 @@ class CollaborationManager {
     this.socket.on("connect", () => {
       this.isConnected = true;
       this.showConnectionStatus("Conectado", "success");
+      this.updateCollaborationPanel();
 
+      // Inicializar EditorSynchronizer una vez que el socket esté conectado
       // Inicializar EditorSynchronizer una vez que el socket esté conectado
       if (!this.editorSynchronizer) {
         this.initializeEditorSynchronizer();
+      } else {
+        // ACTUALIZACIÓN CRÍTICA: Actualizar el socket del synchronizer tras reconexión/failover
+        console.log("🔄 Actualizando socket en EditorSynchronizer");
+        this.editorSynchronizer.initializeSocket(this.socket);
       }
 
       setTimeout(() => {
         if (this.isConnected) {
+          // Si teníamos una sala activa, intentar reconectar
+          if (this.currentRoom) {
+            console.log(`🔄 Intentando reconectar a sala previa: ${this.currentRoom}`);
+            this.showNotification("Reconectando a la sala...", "info");
+
+            // Usar join directo para evitar loops de redirección
+            this._joinRoomDirect({
+              roomId: this.currentRoom,
+              userName: this.userName,
+              password: null // No guardamos el password, asumir sesión válida o pedirá luego
+            });
+          }
+
           this.socket.emit("get-rooms");
         }
       }, 500);
@@ -747,7 +647,10 @@ class CollaborationManager {
 
     this.socket.on("disconnect", (reason) => {
       this.isConnected = false;
-      this.showConnectionStatus("Desconectado", "error");
+
+      // Mostrar estado azul (info) en lugar de error rojo si es desconexión temporal
+      this.showConnectionStatus("Reconectando...", "info");
+      this.updateCollaborationPanel();
 
       if (reason === "io server disconnect") {
         this.socket.connect();
@@ -841,7 +744,8 @@ class CollaborationManager {
     });
 
     this.socket.on("rooms-list", (rooms) => {
-      console.log(`[Client] Received rooms-list event with ${rooms ? rooms.length : 0} rooms`);
+      // console.log(`[Client] Received rooms-list event with ${rooms ? rooms.length : 0} rooms`);
+
       // Use the server list directly as it is the authoritative source containing global rooms
       this.updateAvailableRooms(rooms);
     });
@@ -913,6 +817,16 @@ class CollaborationManager {
     });
   }
 
+  /**
+   * Obtiene la URL del servidor basada en la instancia (server-1, server-2)
+   */
+  getServerUrlForInstance(instanceId) {
+    // Asumimos mapa ordenado por puerto si están en localhost
+    if (instanceId === 'server-1') return this.serverUrls.find(url => url.includes('3001')) || this.serverUrls[0];
+    if (instanceId === 'server-2') return this.serverUrls.find(url => url.includes('3002')) || this.serverUrls[1];
+    return null;
+  }
+
   createRoom(roomId, password = null) {
     if (!this.isConnected) {
       this.showNotification("No conectado al servidor", "error");
@@ -927,51 +841,9 @@ class CollaborationManager {
       return;
     }
 
-    // Verificar si necesitamos cambiar de servidor por sticky routing
-    const targetServerUrl = this.getServerForRoomId(roomId);
-    const currentServerUrl = this.serverUrls[this.currentServerIndex];
+    // REGLA 1: Si ambos están en el mismo puerto con la sala, no hagas cambio de servidor.
+    console.log(`🏠 Creando sala ${roomId} en servidor actual: ${this.serverUrl}`);
 
-    if (targetServerUrl !== currentServerUrl) {
-      console.log(
-        `🎯 Cambiando servidor para crear roomId ${roomId}: ${targetServerUrl}`
-      );
-
-      // Cambiar al servidor correcto
-      const targetServerIndex = this.serverUrls.indexOf(targetServerUrl);
-      if (targetServerIndex !== -1) {
-        this.currentServerIndex = targetServerIndex;
-
-        // Preservar información de la sala para crear después
-        const createData = { roomId, password, userName: this.userName };
-
-        this.showNotification(
-          `Cambiando a servidor optimizado para crear la sala...`,
-          "info"
-        );
-
-        // Desconectar y reconectar al servidor correcto
-        this.socket.disconnect();
-
-        setTimeout(() => {
-          this.connectToServer();
-
-          // Una vez reconectado, crear la sala
-          const waitForConnection = () => {
-            if (this.isConnected) {
-              this._createRoomDirect(createData);
-            } else {
-              setTimeout(waitForConnection, 500);
-            }
-          };
-
-          setTimeout(waitForConnection, 1000);
-        }, 500);
-
-        return;
-      }
-    }
-
-    // Crear directamente si ya estamos en el servidor correcto
     this._createRoomDirect({ roomId, password, userName: this.userName });
   }
 
@@ -1013,51 +885,58 @@ class CollaborationManager {
       return;
     }
 
-    // Verificar si necesitamos cambiar de servidor por sticky routing
-    const targetServerUrl = this.getServerForRoomId(roomId);
-    const currentServerUrl = this.serverUrls[this.currentServerIndex];
+    // Buscar información de la sala para ver dónde está alojada
+    const roomInfo = this.unifiedRooms.find(r => r.id === roomId);
+    let targetServerUrl = this.serverUrl; // Por defecto no cambiamos
 
-    if (targetServerUrl !== currentServerUrl) {
-      console.log(
-        `🎯 Cambiando servidor para roomId ${roomId}: ${targetServerUrl}`
-      );
+    if (roomInfo && roomInfo.serverInstance) {
+      // REGLA 2: Si el host y la sala están en otro servidor, migrar al usuario.
+      const roomServerUrl = this.getServerUrlForInstance(roomInfo.serverInstance);
 
-      // Cambiar al servidor correcto
+      if (roomServerUrl) {
+        // REGLA 3: Evaluar disponibilidad (Rule 3 handled by latency check or failover fallback)
+        if (roomServerUrl !== this.serverUrl) {
+          const targetLatency = this.serverLatencies.get(roomInfo.serverInstance);
+          if (targetLatency !== -1) {
+            targetServerUrl = roomServerUrl;
+            console.log(`🎯 Sala ${roomId} está en ${roomInfo.serverInstance}. Cambiando a ${targetServerUrl}`);
+          } else {
+            console.warn(`⚠️ Sala ${roomId} está en ${roomInfo.serverInstance} pero parece inalcanzable. Me quedo en ${this.serverUrl}`);
+          }
+        }
+      }
+    }
+
+    if (targetServerUrl !== this.serverUrl) {
       const targetServerIndex = this.serverUrls.indexOf(targetServerUrl);
       if (targetServerIndex !== -1) {
         this.currentServerIndex = targetServerIndex;
-
-        // Preservar información de la sala para reconectar
         const rejoinData = { roomId, password, userName: this.userName };
 
-        this.showNotification(
-          `Cambiando a servidor optimizado para la sala...`,
-          "info"
-        );
-
-        // Desconectar y reconectar al servidor correcto
+        this.showNotification(`🔄 Conectando al servidor de la sala...`, "info");
         this.socket.disconnect();
 
         setTimeout(() => {
           this.connectToServer();
-
-          // Una vez reconectado, unirse a la sala
           const waitForConnection = () => {
             if (this.isConnected) {
-              this._joinRoomDirect(rejoinData);
+              if (this.serverUrl === targetServerUrl) {
+                this._joinRoomDirect(rejoinData);
+              } else {
+                // Fallback si el failover nos mandó a otro lado
+                this._joinRoomDirect(rejoinData);
+              }
             } else {
               setTimeout(waitForConnection, 500);
             }
           };
-
           setTimeout(waitForConnection, 1000);
         }, 500);
-
         return;
       }
     }
 
-    // Unirse directamente si ya estamos en el servidor correcto
+    // Unirse directamente si estamos en el servidor correcto
     this._joinRoomDirect({ roomId, password, userName: this.userName });
   }
 
@@ -1411,7 +1290,8 @@ class CollaborationManager {
         console.warn('⚠️ CollaborationPanel no está disponible para actualizar salas');
       }
 
-      console.log('🏠 Salas actualizadas en UI:', enrichedRooms);
+      // console.log('🏠 Salas actualizadas en UI:', enrichedRooms);
+
     } catch (error) {
       console.error('❌ Error actualizando panel de salas:', error);
     }
@@ -1459,9 +1339,18 @@ class CollaborationManager {
   /**
    * Verifica si el servidor actual es óptimo para la sala
    */
+
+
+
+  /**
+   * Verifica si el servidor actual es el host de la sala (para UI)
+   */
   isOptimalServerForRoom(roomId) {
-    const optimalServer = this.getOptimalServerForRoom(roomId);
-    return optimalServer === this.serverUrl;
+    const roomInfo = this.unifiedRooms.find(r => r.id === roomId);
+    if (roomInfo && roomInfo.serverInstance) {
+      return roomInfo.serverInstance === this.getCurrentServerInstance();
+    }
+    return true; // Si no sé, asumo que sí para no mostrar alertas raras
   }
 
   /**

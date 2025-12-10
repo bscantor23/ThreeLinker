@@ -973,6 +973,12 @@ class CollaborationManager {
 
       // Wait for connection AND synchronizer initialization before joining
       const waitForConnection = () => {
+        console.log(`[DEBUG] waitForConnection check:`, {
+          isConnected: this.isConnected,
+          hasSynchronizer: !!this.editorSynchronizer,
+          socketMatch: this.editorSynchronizer?.socket === this.socket
+        });
+
         if (this.isConnected && this.editorSynchronizer) {
           // Ensure synchronizer has the correct socket
           if (this.editorSynchronizer.socket !== this.socket) {
@@ -980,6 +986,7 @@ class CollaborationManager {
             this.editorSynchronizer.initializeSocket(this.socket);
           }
 
+          console.log(`[DEBUG] Emitting join-room for ${roomId}`);
           this.socket.emit("join-room", {
             roomId: roomId,
             userName: userName,
@@ -994,6 +1001,7 @@ class CollaborationManager {
       setTimeout(waitForConnection, 100);
     } else {
       // Already connected with correct roomId, just join
+      console.log(`[DEBUG] Direct join (no reconnect needed) for ${roomId}`);
       this.socket.emit("join-room", {
         roomId: roomId,
         userName: userName,
@@ -1017,8 +1025,9 @@ class CollaborationManager {
       if (wasHost) {
         this.showNotification("Saliste de la sala", "info");
       } else {
-        this.editor.clear();
-        this.showNotification("Saliste de la sala. Escena limpiada.", "info");
+        // NO limpiar el editor para invitados
+        // El estado se sincronizará automáticamente al volver a entrar
+        this.showNotification("Saliste de la sala.", "info");
       }
 
       this.updateRoomDisplay(null);

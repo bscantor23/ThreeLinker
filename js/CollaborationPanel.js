@@ -207,10 +207,18 @@ function createRoomControls(content, collaborationManager) {
   roomControls.setClass("room-controls");
   content.add(roomControls);
 
+  // Check if form already exists to avoid double wrapping if tool runs twice conceptually, but here we replace the block.
+  // Room controls form wrapper
+  const form = document.createElement("form");
+  form.className = "room-controls-form";
+  form.onsubmit = (e) => { e.preventDefault(); };
+  roomControls.dom.appendChild(form);
+
   // Nombre de sala
   const roomNameRow = new UIRow();
   roomNameRow.setClass("form-row");
-  roomControls.add(roomNameRow);
+  // Change to append to form instead of roomControls
+  form.appendChild(roomNameRow.dom);
 
   const roomNameLabel = new UIText("🏠 Sala:");
   roomNameLabel.setClass("form-label");
@@ -219,12 +227,16 @@ function createRoomControls(content, collaborationManager) {
   const roomInput = new UIInput("");
   roomInput.setClass("form-input");
   roomInput.dom.placeholder = "Nombre de sala...";
+  roomInput.dom.name = "roomName";
+  // Autocomplete attribute
+  roomInput.dom.autocomplete = "off";
   roomNameRow.add(roomInput);
 
   // Campo de contraseña
   const passwordRow = new UIRow();
   passwordRow.setClass("form-row");
-  roomControls.add(passwordRow);
+  // Change to append to form
+  form.appendChild(passwordRow.dom);
 
   const passwordLabel = new UIText("🔒 Clave:");
   passwordLabel.setClass("form-label");
@@ -234,6 +246,8 @@ function createRoomControls(content, collaborationManager) {
   passwordInput.setClass("form-input");
   passwordInput.dom.type = "password";
   passwordInput.dom.placeholder = "Contraseña (opcional)...";
+  passwordInput.dom.name = "roomPassword";
+  passwordInput.dom.autocomplete = "current-password";
   passwordRow.add(passwordInput);
 
   // Botones de acción
@@ -602,7 +616,7 @@ function createRoomItem(room, collaborationManager, roomInput) {
   // ID de la sala con badge de servidor
   const roomIdElement = document.createElement("div");
   roomIdElement.className = `room-id ${room.isProtected ? "protected" : ""}`;
-  
+
   // Agregar badge de servidor si está disponible
   if (room.serverBadge) {
     const serverBadge = document.createElement("span");
@@ -614,15 +628,15 @@ function createRoomItem(room, collaborationManager, roomInput) {
   } else {
     roomIdElement.textContent = roomId + (room.isProtected ? " 🔒" : "");
   }
-  
+
   roomHeader.appendChild(roomIdElement);
 
   // Indicador de latencia si está disponible
   if (room.serverLatency !== undefined && room.serverLatency > 0) {
     const latencyIndicator = document.createElement("span");
-    const latencyClass = room.serverLatency < 50 ? "excellent" : 
-                        room.serverLatency < 100 ? "good" : 
-                        room.serverLatency < 200 ? "fair" : "poor";
+    const latencyClass = room.serverLatency < 50 ? "excellent" :
+      room.serverLatency < 100 ? "good" :
+        room.serverLatency < 200 ? "fair" : "poor";
     latencyIndicator.className = `latency-indicator ${latencyClass}`;
     latencyIndicator.textContent = `${room.serverLatency}ms`;
     latencyIndicator.title = `Latencia al servidor: ${room.serverLatency}ms`;
@@ -641,9 +655,8 @@ function createRoomItem(room, collaborationManager, roomInput) {
   const roomStats = document.createElement("div");
   roomStats.className = "room-stats";
   const protectionText = isProtected ? " • Protegida" : "";
-  roomStats.textContent = `${userCount} usuario${
-    userCount === 1 ? "" : "s"
-  }${protectionText}`;
+  roomStats.textContent = `${userCount} usuario${userCount === 1 ? "" : "s"
+    }${protectionText}`;
   roomInfo.appendChild(roomStats);
 
   // Información adicional de display si está disponible
@@ -658,9 +671,8 @@ function createRoomItem(room, collaborationManager, roomInput) {
 
   // Indicador de estado (editor/sala vacía)
   const statusIndicator = document.createElement("div");
-  statusIndicator.className = `room-status-indicator ${
-    room.hasEditor ? "has-editor" : ""
-  }`;
+  statusIndicator.className = `room-status-indicator ${room.hasEditor ? "has-editor" : ""
+    }`;
   statusIndicator.title = room.hasEditor ? "Tiene editor" : "Sala vacía";
   roomItem.appendChild(statusIndicator);
 
@@ -694,8 +706,7 @@ function handleRoomItemClick(room, collaborationManager, roomInput) {
     const isHost = collaborationManager?.isHost;
     const action = isHost ? "elimina" : "sal de";
     collaborationManager.showNotification(
-      `Ya estás en la sala "${currentRoom}". ${
-        action.charAt(0).toUpperCase() + action.slice(1)
+      `Ya estás en la sala "${currentRoom}". ${action.charAt(0).toUpperCase() + action.slice(1)
       } la sala actual primero.`,
       "error"
     );

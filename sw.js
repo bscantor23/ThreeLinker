@@ -1,4 +1,4 @@
-const cacheName = "threejs-editor-vite";
+const cacheName = "threejs-editor-vite-v2";
 
 const assets = [
   "./",
@@ -145,6 +145,22 @@ self.addEventListener("fetch", async function (event) {
   if (request.url.startsWith("chrome-extension")) return;
 
   event.respondWith(networkFirst(request));
+});
+
+self.addEventListener("activate", async function (event) {
+  event.waitUntil(
+    caches.keys().then((keyList) => {
+      return Promise.all(
+        keyList.map((key) => {
+          if (key !== cacheName) {
+            console.log("[SW] Removing old cache", key);
+            return caches.delete(key);
+          }
+        })
+      );
+    })
+  );
+  return self.clients.claim();
 });
 
 async function networkFirst(request) {

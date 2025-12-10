@@ -516,6 +516,11 @@ function updateCurrentRoom(
  * Actualiza la lista de usuarios
  */
 function updateUsersList(users, usersList) {
+  // Safety check
+  if (!users || !Array.isArray(users)) {
+    users = [];
+  }
+
   // Limpiar lista
   while (usersList.dom.firstChild) {
     usersList.dom.firstChild.remove();
@@ -563,21 +568,21 @@ function updateAvailableRooms(
   collaborationManager,
   roomInput
 ) {
+  // Debug log
+  console.log('Renderizando salas:', rooms.length, '| DOM Connected:', roomsList.dom.isConnected);
+
   // Limpiar lista actual
   roomsList.dom.innerHTML = "";
 
   // Si no hay salas, mostrar mensaje vacío
   if (!rooms || rooms.length === 0) {
-    // ... (mensaje vacío)
     const emptyMsg = document.createElement("div");
     emptyMsg.className = "empty-message fade-in";
     emptyMsg.textContent = "No hay salas disponibles";
     roomsList.dom.appendChild(emptyMsg);
+    console.log('Renderizado: Mensaje vacío');
     return;
   }
-
-  // Debug log
-  // console.log('Renderizando salas:', rooms.length);
 
   // Crear elementos de salas
   for (const room of rooms) {

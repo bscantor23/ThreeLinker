@@ -11,13 +11,14 @@ export async function broadcastRoomsList(io, roomManager) {
   try {
     const activeRooms = await roomManager.getActiveRooms();
     io.emit("rooms-list", activeRooms);
-    logServerEvent('ROOMS_LIST_BROADCAST', null, { 
+    logServerEvent('ROOMS_LIST_BROADCAST', null, {
       roomCount: activeRooms.length,
+      rooms: activeRooms.map(r => r.id), // Log exact room IDs
       timestamp: Date.now()
     });
   } catch (error) {
-    logServerEvent('BROADCAST_ROOMS_ERROR', null, { 
-      error: error.message 
+    logServerEvent('BROADCAST_ROOMS_ERROR', null, {
+      error: error.message
     });
   }
 }

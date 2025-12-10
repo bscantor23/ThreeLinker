@@ -144,6 +144,9 @@ self.addEventListener("fetch", async function (event) {
 
   if (request.url.startsWith("chrome-extension")) return;
 
+  // Ignore Vite Dev Server HMR requests (port 5173)
+  if (request.url.includes(":5173") || request.url.includes("/@vite/")) return;
+
   event.respondWith(networkFirst(request));
 });
 

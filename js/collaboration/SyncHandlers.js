@@ -32,6 +32,7 @@ class SyncHandlers {
 
     // Validación básica de datos
     if (!data || !data.editorData) {
+      console.error("[Sync] Received invalid editor data:", data);
       this.showNotification("Error: datos de editor inválidos", "error");
       return;
     }

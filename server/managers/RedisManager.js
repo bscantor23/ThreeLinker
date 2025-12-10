@@ -315,6 +315,14 @@ class RedisManager {
     };
 
     await this.hset(key, roomId, roomInfo, 86400); // TTL 24 horas
+
+    // Also update fallback memory cache explicitly if using memory fallback (or just to be safe)
+    if (this.fallbackToMemory) {
+      const hash = this.memoryCache.get(key) || {};
+      hash[roomId] = roomInfo;
+      this.memoryCache.set(key, hash);
+    }
+
     logServerEvent('ROOM_REGISTERED', null, { roomId, server: roomInfo.serverInstance });
   }
 

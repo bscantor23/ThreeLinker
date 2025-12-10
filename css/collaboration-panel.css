@@ -775,29 +775,61 @@
 /* Sala items con información de servidor */
 .room-item {
   position: relative;
-  padding: 8px;
+  border-bottom: 1px solid #333;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  height: 32px; /* Fixed height for consistency */
+}
+
+.room-item:hover {
+  background-color: #444;
+}
+
+.room-item:last-child {
+  border-bottom: none;
 }
 
 .room-item .room-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  margin-bottom: 0 !important; /* Remove margin to center vertically */
+  flex: 0 0 auto;
 }
 
 .room-item .room-id {
   font-weight: bold;
-  font-size: 12px;
+  font-size: 13px; /* Slightly larger */
   color: #ffffff;
   margin-bottom: 0;
+  white-space: nowrap;
 }
 
-.room-item .server-badge {
-  margin-left: 8px;
-}
-
-.room-item .room-stats {
+.room-item .room-info {
+  flex: 1;
   display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-right: 8px;
+}
+
+.room-display-info {
+  font-size: 11px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+/* Status indicator adjustment */
+.room-status-indicator {
+  margin-left: 4px;
+}
+
+/* Clean up unused legacy classes if possible or just override them */
+.room-item .room-stats {
+  display: none; 
+
   align-items: center;
   gap: 8px;
   font-size: 10px;

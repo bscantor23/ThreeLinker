@@ -94,4 +94,4 @@ async function initializeCollaboration() {
 }
 
 // Inicializar colaboración
-setTimeout(initializeCollaboration, 1000);
+// setTimeout(initializeCollaboration, 1000);

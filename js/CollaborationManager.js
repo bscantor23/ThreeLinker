@@ -841,9 +841,9 @@ class CollaborationManager {
     });
 
     this.socket.on("rooms-list", (rooms) => {
-      // Combinar salas del socket con salas unificadas cacheadas
-      const combinedRooms = this.combineSocketRoomsWithUnified(rooms);
-      this.updateAvailableRooms(combinedRooms);
+      console.log(`[Client] Received rooms-list event with ${rooms ? rooms.length : 0} rooms`);
+      // Use the server list directly as it is the authoritative source containing global rooms
+      this.updateAvailableRooms(rooms);
     });
 
     // Evento para salas unificadas
@@ -1390,28 +1390,31 @@ class CollaborationManager {
   updateAvailableRooms(rooms) {
     if (!rooms || !Array.isArray(rooms)) return;
 
-    // Enriquecer salas con información visual del servidor
-    const enrichedRooms = rooms.map(room => ({
-      ...room,
-      serverBadge: this.getServerBadge(room.serverInstance),
-      serverColor: this.getServerColor(room.serverInstance),
-      serverLatency: this.serverLatencies.get(room.serverInstance) || 0,
-      isOptimal: this.isOptimalServerForRoom(room.id),
-      displayInfo: this.getRoomDisplayInfo(room)
-    }));
-
     // Actualizar UI
     try {
+      // Enriquecer salas con información visual del servidor
+      const enrichedRooms = rooms.map(room => {
+        try {
+          return {
+            ...room,
+            displayInfo: this.getRoomDisplayInfo(room)
+          };
+        } catch (err) {
+          console.error('Error processing room:', room, err);
+          return room;
+        }
+      });
+
       if (globalThis.collaborationPanel?.updateAvailableRooms) {
         globalThis.collaborationPanel.updateAvailableRooms(enrichedRooms);
       } else {
         console.warn('⚠️ CollaborationPanel no está disponible para actualizar salas');
       }
+
+      console.log('🏠 Salas actualizadas en UI:', enrichedRooms);
     } catch (error) {
       console.error('❌ Error actualizando panel de salas:', error);
     }
-
-    console.log('🏠 Salas actualizadas en UI:', enrichedRooms);
   }
 
   /**
@@ -1465,6 +1468,7 @@ class CollaborationManager {
    * Obtiene información de display para la sala
    */
   getRoomDisplayInfo(room) {
+    if (!room) return '';
     const latency = this.serverLatencies.get(room.serverInstance);
     const latencyText = latency !== undefined ? `${latency}ms` : '--ms';
     const userCount = room.userCount || room.users || 0;

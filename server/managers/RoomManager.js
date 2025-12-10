@@ -369,23 +369,10 @@ class RoomManager {
    * @returns {Array} Lista de salas ordenadas por actividad con información del servidor
    */
   async getActiveRooms() {
+    let globalRooms = [];
     try {
       // Intentar obtener de Redis primero (incluye todas las instancias)
-      const globalRooms = await this.redis.getAllGlobalRooms();
-
-      if (globalRooms && globalRooms.length > 0) {
-        // Enriquecer con información del servidor y estado de conexión
-        const enrichedRooms = globalRooms.map(room => ({
-          ...room,
-          serverUrl: this.getServerUrlForRoom(room.id),
-          isAvailable: this.isServerHealthy(room.serverInstance),
-          serverStatus: this.getServerStatus(room.serverInstance),
-          timeSinceActivity: Date.now() - (room.lastActivity || Date.now()),
-          displayName: this.generateDisplayName(room.id, room.serverInstance)
-        }));
-
-        return enrichedRooms.sort((a, b) => b.lastActivity - a.lastActivity);
-      }
+      globalRooms = await this.redis.getAllGlobalRooms();
     } catch (error) {
       logServerEvent('GET_GLOBAL_ROOMS_ERROR', null, {
         error: error.message,
@@ -393,9 +380,11 @@ class RoomManager {
       });
     }
 
-    // Fallback: devolver solo salas locales si Redis falla
-    const activeRooms = Array.from(this.rooms.entries()).map(
-      ([roomId, data]) => ({
+    // Merge global rooms with local rooms to ensure consistency
+    // Local rooms are always authoritative for this server instance
+    const localRoomsMap = new Map();
+    Array.from(this.rooms.entries()).forEach(([roomId, data]) => {
+      localRoomsMap.set(roomId, {
         id: roomId,
         userCount: data.users.size,
         hasEditor: !!data.editor,
@@ -406,14 +395,40 @@ class RoomManager {
         serverInstance: process.env.INSTANCE_ID || 'local',
         serverUrl: this.getServerUrlForRoom(roomId),
         isAvailable: true,
-        serverStatus: 'available',
+        serverStatus: 'current', // Local rooms are always current
         timeSinceActivity: Date.now() - (data.lastActivity || Date.now()),
         displayName: this.generateDisplayName(roomId, process.env.INSTANCE_ID || 'local')
-      })
-    );
+      });
+    });
 
-    // Ordenar por actividad más reciente
-    return activeRooms.sort((a, b) => b.lastActivity - a.lastActivity);
+    const mergedRoomsMap = new Map(localRoomsMap); // Start with local rooms
+
+    if (globalRooms && globalRooms.length > 0) {
+      globalRooms.forEach(room => {
+        // Only add if not already present (local version takes precedence)
+        if (!mergedRoomsMap.has(room.id)) {
+          mergedRoomsMap.set(room.id, {
+            ...room,
+            serverUrl: this.getServerUrlForRoom(room.id),
+            isAvailable: this.isServerHealthy(room.serverInstance),
+            serverStatus: this.getServerStatus(room.serverInstance),
+            timeSinceActivity: Date.now() - (room.lastActivity || Date.now()),
+            displayName: this.generateDisplayName(room.id, room.serverInstance)
+          });
+        }
+      });
+    }
+
+    const resultArray = Array.from(mergedRoomsMap.values()).sort((a, b) => b.lastActivity - a.lastActivity);
+
+    // DEBUG LOG
+    console.log(`[getActiveRooms] Local: ${this.rooms.size} | Global (Redis): ${globalRooms ? globalRooms.length : 0} | Merged: ${resultArray.length}`);
+    if (this.rooms.size > 0) {
+      console.log('[getActiveRooms] Local IDs:', Array.from(this.rooms.keys()));
+    }
+
+    return resultArray;
+
   }
 
   /**

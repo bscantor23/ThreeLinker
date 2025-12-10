@@ -416,7 +416,7 @@ class CollaborationManager {
       })`
     );
 
-    this.socket = io(this.serverUrl, {
+    const connectionOptions = {
       path: "/socket.io",
       withCredentials: true,
       timeout: this.connectionTimeout,
@@ -427,7 +427,15 @@ class CollaborationManager {
       transports: ["websocket", "polling"],
       pingTimeout: 30000,
       pingInterval: 15000,
-    });
+    };
+
+    // [CRITICAL] Enviar roomId para Sticky Routing en Nginx/Load Balancer
+    if (this.currentRoom) {
+      console.log(`📎 Adjuntando roomId para sticky session: ${this.currentRoom}`);
+      connectionOptions.query = { roomId: this.currentRoom };
+    }
+
+    this.socket = io(this.serverUrl, connectionOptions);
 
     this.setupSocketListeners();
     this.setupFailoverHandling();

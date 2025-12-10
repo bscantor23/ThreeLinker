@@ -92,6 +92,7 @@ class CollaborationManager {
     this.serverUrl = this.serverUrls[0];
     this.socket = null;
     this.currentRoom = null;
+    this.pendingRoomId = null; // Room we're about to join (for sticky routing)
     this.isConnected = false;
     this.isHost = false;
     this.isWaitingForInitialSync = false;
@@ -430,9 +431,10 @@ class CollaborationManager {
     };
 
     // [CRITICAL] Enviar roomId para Sticky Routing en Nginx/Load Balancer
-    if (this.currentRoom) {
-      console.log(`📎 Adjuntando roomId para sticky session: ${this.currentRoom}`);
-      connectionOptions.query = { roomId: this.currentRoom };
+    const roomIdForRouting = this.currentRoom || this.pendingRoomId;
+    if (roomIdForRouting) {
+      console.log(`📎 Adjuntando roomId para sticky session: ${roomIdForRouting}`);
+      connectionOptions.query = { roomId: roomIdForRouting };
     }
 
     this.socket = io(this.serverUrl, connectionOptions);
@@ -713,6 +715,7 @@ class CollaborationManager {
     this.socket.on("joined-room", (data) => {
       this.currentRoom = data.roomId;
       this.isHost = data.isHost;
+      this.pendingRoomId = null; // Clear pending room after successful join
       this.showNotification(`Te uniste a la sala "${data.roomId}"`, "success");
       this.updateCollaborationPanel();
 
@@ -722,6 +725,7 @@ class CollaborationManager {
     });
 
     this.socket.on("join-room-failed", (data) => {
+      this.pendingRoomId = null; // Clear pending room on failure
       this.showNotification(`Error: ${data.error}`, "error");
     });
 
@@ -952,13 +956,45 @@ class CollaborationManager {
    * Método interno para unirse a una sala directamente
    */
   _joinRoomDirect({ roomId, password, userName }) {
-    this.socket.emit("join-room", {
-      roomId: roomId,
-      userName: userName,
-      password: password,
-    });
+    // [CRITICAL FIX] Set pending room BEFORE reconnecting
+    // This ensures sticky routing works when rejoining
+    this.pendingRoomId = roomId;
 
-    this.showNotification(`Intentando unirse a la sala: ${roomId}...`, "info");
+    // Check if we need to reconnect with the new roomId
+    const needsReconnect = !this.socket ||
+      !this.socket.connected ||
+      (this.socket.io.opts.query?.roomId !== roomId);
+
+    if (needsReconnect) {
+      console.log(`🔄 Reconectando con roomId para sticky routing: ${roomId}`);
+
+      // Reconnect will use pendingRoomId in query params
+      this.connectToServer();
+
+      // Wait for connection before joining
+      const waitForConnection = () => {
+        if (this.isConnected) {
+          this.socket.emit("join-room", {
+            roomId: roomId,
+            userName: userName,
+            password: password,
+          });
+          this.showNotification(`Intentando unirse a la sala: ${roomId}...`, "info");
+        } else {
+          setTimeout(waitForConnection, 100);
+        }
+      };
+
+      setTimeout(waitForConnection, 100);
+    } else {
+      // Already connected with correct roomId, just join
+      this.socket.emit("join-room", {
+        roomId: roomId,
+        userName: userName,
+        password: password,
+      });
+      this.showNotification(`Intentando unirse a la sala: ${roomId}...`, "info");
+    }
   }
 
   leaveRoom() {

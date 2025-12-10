@@ -21,7 +21,7 @@ class CollaborationManager {
     if (serverUrls) {
       this.serverUrls = Array.isArray(serverUrls) ? serverUrls : [serverUrls];
       console.log('🔧 Usando URLs proporcionadas:', this.serverUrls);
-    } else if (isLocal || import.meta.env.MODE === 'development') {
+    } else if (isLocal) {
       // 🧪 Modo desarrollo: conecta directo a los puertos del backend
       let devServerUrl = import.meta.env.VITE_SERVER_URL;
       

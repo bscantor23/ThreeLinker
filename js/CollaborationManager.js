@@ -753,6 +753,11 @@ class CollaborationManager {
       if (this.editorSynchronizer) {
         this.editorSynchronizer.setHostStatus(false);
       }
+
+      // Recargar la página para garantizar estado limpio
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     });
 
     this.socket.on("rooms-list", (rooms) => {
@@ -1025,8 +1030,6 @@ class CollaborationManager {
       if (wasHost) {
         this.showNotification("Saliste de la sala", "info");
       } else {
-        // NO limpiar el editor para invitados
-        // El estado se sincronizará automáticamente al volver a entrar
         this.showNotification("Saliste de la sala.", "info");
       }
 
@@ -1034,12 +1037,9 @@ class CollaborationManager {
       this.updateUserCount(0);
       globalThis.collaborationPanel?.updateUsersList?.([]);
 
+      // Recargar la página para garantizar estado limpio
       setTimeout(() => {
-        if (this.isConnected) {
-          if (this.isConnected) {
-            this.socket.emit("get-rooms");
-          }
-        }
+        window.location.reload();
       }, 500);
     }
   }

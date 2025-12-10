@@ -167,24 +167,27 @@ setupRedisAdapter().then(adapter => {
   }
 });
 
-// Middleware para sticky sessions por roomId
-io.use(async (socket, next) => {
-  const roomId = socket.handshake.query.roomId;
+// Middleware para sticky sessions por roomId (solo en desarrollo)
+// En producción, Nginx maneja el sticky routing
+if (process.env.NODE_ENV !== 'production') {
+  io.use(async (socket, next) => {
+    const roomId = socket.handshake.query.roomId;
 
-  if (roomId) {
-    // Verificar si este servidor debe manejar esta sala
-    const targetServer = LOAD_BALANCER_CONFIG.getServerForRoom(roomId);
+    if (roomId) {
+      // Verificar si este servidor debe manejar esta sala
+      const targetServer = LOAD_BALANCER_CONFIG.getServerForRoom(roomId);
 
-    if (targetServer.port !== instanceConfig.PORT) {
-      console.log(`🔄 Redirigiendo sala ${roomId} de ${instanceConfig.INSTANCE_ID} a ${targetServer.id}`);
-      return next(new Error(`REDIRECT:${targetServer.url}`));
+      if (targetServer.port !== instanceConfig.PORT) {
+        console.log(`🔄 Redirigiendo sala ${roomId} de ${instanceConfig.INSTANCE_ID} a ${targetServer.id}`);
+        return next(new Error(`REDIRECT:${targetServer.url}`));
+      }
+
+      console.log(`✅ ${instanceConfig.INSTANCE_ID} manejará sala ${roomId}`);
     }
 
-    console.log(`✅ ${instanceConfig.INSTANCE_ID} manejará sala ${roomId}`);
-  }
-
-  next();
-});
+    next();
+  });
+}
 
 // Crear RedisManager compartido
 const redisManager = new RedisManager();

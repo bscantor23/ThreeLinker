@@ -518,66 +518,44 @@ class SyncHandlers {
     const autoSyncEnabled = this.editor.autoSyncEnabled;
     this.editor.autoSyncEnabled = false;
 
+    console.log("[Sync] Applying full editor data:", {
+      hasScene: !!editorData?.scene,
+      hasCamera: !!editorData?.camera,
+      keys: editorData ? Object.keys(editorData) : 'null'
+    });
+
     try {
       if (!editorData) {
         throw new Error("No editor data provided");
       }
 
-      // Validar estructura mínima
-      if (!editorData.object) {
-        editorData.object = {
-          uuid: "scene-" + Date.now(),
-          type: "Scene",
-          name: "Scene",
-          children: [],
-          layers: 1,
-          matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-        };
+      // Ensure scene exists (critical for fromJSON)
+      if (!editorData.scene) {
+        console.warn("[Sync] editorData.scene missing, using current scene as fallback");
+        editorData.scene = this.editor.scene.toJSON();
       }
 
-      if (!editorData.object.uuid) {
-        editorData.object.uuid = "scene-" + Date.now();
-      }
-      if (!editorData.object.type) {
-        editorData.object.type = "Scene";
-      }
-      if (!editorData.object.children) {
-        editorData.object.children = [];
-      }
-
-      // Asegurar cámara
+      // Ensure camera exists
       if (!editorData.camera) {
+        console.warn("[Sync] editorData.camera missing, using current camera as fallback");
         const currentCamera = this.editor.camera;
         editorData.camera = currentCamera.toJSON();
       }
 
-      // Preservar escena
-      if (!editorData.scene) {
-        editorData.scene = this.editor.scene.toJSON();
-      }
-
-      // Limpiar scripts huérfanos
+      // Clean orphaned scripts
       this.cleanOrphanedScripts(editorData);
 
-      // Asegurar scripts
-      if (!this.editor.scripts) {
-        this.editor.scripts = {};
+      // Ensure scripts check
+      if (editorData.scripts === undefined || editorData.scripts === null) {
+        editorData.scripts = {};
       }
 
-      // Asegurar arrays vacíos
-      if (!editorData.geometries) editorData.geometries = [];
-      if (!editorData.materials) editorData.materials = [];
-      if (!editorData.textures) editorData.textures = [];
-      if (!editorData.images) editorData.images = [];
-      if (!editorData.shapes) editorData.shapes = [];
-      if (!editorData.skeletons) editorData.skeletons = [];
-      if (!editorData.animations) editorData.animations = [];
-      if (!editorData.nodes) editorData.nodes = [];
-
+      // Execute load
       await this.editor.fromJSON(editorData);
 
       this.editor.signals.sceneGraphChanged.dispatch();
     } catch (error) {
+      console.error("[Sync] Error in applyFullEditor:", error);
       throw error;
     } finally {
       this.editor.autoSyncEnabled = autoSyncEnabled;

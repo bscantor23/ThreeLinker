@@ -568,6 +568,7 @@ function updateAvailableRooms(
 
   // Si no hay salas, mostrar mensaje vacío
   if (!rooms || rooms.length === 0) {
+    // ... (mensaje vacío)
     const emptyMsg = document.createElement("div");
     emptyMsg.className = "empty-message fade-in";
     emptyMsg.textContent = "No hay salas disponibles";
@@ -575,11 +576,19 @@ function updateAvailableRooms(
     return;
   }
 
+  // Debug log
+  // console.log('Renderizando salas:', rooms.length);
+
   // Crear elementos de salas
   for (const room of rooms) {
-    const roomItem = createRoomItem(room, collaborationManager, roomInput);
-    roomItem.classList.add("room-item", "fade-in");
-    roomsList.dom.appendChild(roomItem);
+    try {
+      if (!room) continue;
+      const roomItem = createRoomItem(room, collaborationManager, roomInput);
+      roomItem.classList.add("room-item", "fade-in");
+      roomsList.dom.appendChild(roomItem);
+    } catch (err) {
+      console.error('Error renderizando item de sala:', err, room);
+    }
   }
 }
 
@@ -587,6 +596,10 @@ function updateAvailableRooms(
  * Crea un elemento de sala en la lista con información de servidor
  */
 function createRoomItem(room, collaborationManager, roomInput) {
+  if (!collaborationManager) {
+    console.error('createRoomItem: collaborationManager is undefined');
+  }
+
   const roomItem = document.createElement("div");
   roomItem.className = "room-item";
 
@@ -596,7 +609,10 @@ function createRoomItem(room, collaborationManager, roomInput) {
 
   // Determinar clase CSS basada en servidor
   if (room.serverInstance) {
-    const currentServer = collaborationManager.getCurrentServerInstance();
+    // Safety check
+    const currentServer = collaborationManager?.getCurrentServerInstance ?
+      collaborationManager.getCurrentServerInstance() : 'current';
+
     if (room.serverInstance === currentServer) {
       roomItem.classList.add("server-current");
     } else if (room.serverInstance === 'server-1' || room.serverInstance === 'server-2') {
@@ -621,14 +637,7 @@ function createRoomItem(room, collaborationManager, roomInput) {
   let idText = roomId + (room.isProtected ? " 🔒" : "");
   roomIdElement.textContent = idText;
 
-  // Badge de servidor al lado del nombre si se desea, o dejarlo limpio
-  if (room.serverBadge) {
-    const serverBadge = document.createElement("span");
-    serverBadge.className = `server-badge ${room.serverBadge.toLowerCase().replace(' ', '-')}`;
-    serverBadge.textContent = room.serverBadge;
-    roomIdElement.appendChild(serverBadge);
-  }
-
+  // Clean header - no badges here as requested
   roomHeader.appendChild(roomIdElement);
   roomItem.appendChild(roomHeader);
 

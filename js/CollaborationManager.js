@@ -979,12 +979,20 @@ class CollaborationManager {
    * Método interno para crear una sala directamente
    */
   _createRoomDirect({ roomId, password, userName }) {
-    this.socket.emit("create-room", {
-      roomId: roomId,
-      userName: userName,
-      password: password,
-      editor: this.editor.toJSON(), // Enviar estado inicial del editor
+    const editorData = this.editor.toJSON();
+    console.log("[Manager] Creating room with editor data:", {
+      keys: Object.keys(editorData),
+      sceneChildren: editorData.scene?.object?.children?.length
     });
+
+    // Crear payload inicial
+    const payload = {
+      roomId,
+      userName,
+      password,
+      editor: editorData
+    };
+    this.socket.emit("create-room", payload);
 
     this.showNotification(`Creando sala: ${roomId}...`, "info");
   }
@@ -1393,7 +1401,15 @@ class CollaborationManager {
     }));
 
     // Actualizar UI
-    globalThis.collaborationPanel?.updateAvailableRooms?.(enrichedRooms);
+    try {
+      if (globalThis.collaborationPanel?.updateAvailableRooms) {
+        globalThis.collaborationPanel.updateAvailableRooms(enrichedRooms);
+      } else {
+        console.warn('⚠️ CollaborationPanel no está disponible para actualizar salas');
+      }
+    } catch (error) {
+      console.error('❌ Error actualizando panel de salas:', error);
+    }
 
     console.log('🏠 Salas actualizadas en UI:', enrichedRooms);
   }
@@ -1450,24 +1466,19 @@ class CollaborationManager {
    */
   getRoomDisplayInfo(room) {
     const latency = this.serverLatencies.get(room.serverInstance);
-    // Always show latency, default to -- if undefined
     const latencyText = latency !== undefined ? `${latency}ms` : '--ms';
-
-    const isOptimal = this.isOptimalServerForRoom(room.id);
     const userCount = room.userCount || room.users || 0;
 
     let info = [];
 
-    // 1. Latency
+    // 1. Green circle (Always connected/active)
+    info.push('🟢');
+
+    // 2. Latency
     info.push(latencyText);
 
-    // 2. User Count
+    // 3. User Count
     info.push(`${userCount}👥`);
-
-    // 3. Status/Optimal
-    if (isOptimal) {
-      info.push('⚡ Óptimo');
-    }
 
     return info.join(' • ');
   }

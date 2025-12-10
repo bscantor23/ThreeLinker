@@ -971,9 +971,15 @@ class CollaborationManager {
       // Reconnect will use pendingRoomId in query params
       this.connectToServer();
 
-      // Wait for connection before joining
+      // Wait for connection AND synchronizer initialization before joining
       const waitForConnection = () => {
-        if (this.isConnected) {
+        if (this.isConnected && this.editorSynchronizer) {
+          // Ensure synchronizer has the correct socket
+          if (this.editorSynchronizer.socket !== this.socket) {
+            console.log("🔄 Reinitializing EditorSynchronizer socket before join");
+            this.editorSynchronizer.initializeSocket(this.socket);
+          }
+
           this.socket.emit("join-room", {
             roomId: roomId,
             userName: userName,

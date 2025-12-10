@@ -24,7 +24,7 @@ class CollaborationManager {
     } else if (isLocal) {
       // 🧪 Modo desarrollo: conecta directo a los puertos del backend
       let devServerUrl = import.meta.env.VITE_SERVER_URL;
-      
+
       // Validar si VITE_SERVER_URL es válido (debe tener puerto numérico)
       if (devServerUrl) {
         const portMatch = devServerUrl.match(/:(\d+)/);
@@ -35,7 +35,7 @@ class CollaborationManager {
           console.log('✅ VITE_SERVER_URL con puerto válido:', devServerUrl);
         }
       }
-      
+
       this.serverUrls = [
         devServerUrl || "http://localhost:3001",
         "http://localhost:3002",
@@ -167,7 +167,7 @@ class CollaborationManager {
    */
   async fetchUnifiedRooms() {
     if (this.isLoadingRooms) return this.unifiedRooms;
-    
+
     // Verificar cache
     const now = Date.now();
     if (now - this.lastRoomsUpdate < this.roomsCacheTimeout && this.unifiedRooms.length > 0) {
@@ -179,17 +179,17 @@ class CollaborationManager {
     try {
       // Obtener salas desde el servidor actual (que debe tener acceso a todas via Redis)
       const roomsResponse = await this.fetchFromEndpoint('/api/all-rooms');
-      
+
       if (roomsResponse && roomsResponse.success) {
         this.unifiedRooms = roomsResponse.rooms || [];
         this.lastRoomsUpdate = now;
-        
+
         // Actualizar cache y UI de forma transparente
         this.updateRoomsCache();
         this.updateAvailableRooms(this.unifiedRooms);
-        
+
         console.log(`📋 Salas obtenidas:`, this.unifiedRooms);
-        
+
         return this.unifiedRooms;
       }
     } catch (error) {
@@ -198,7 +198,7 @@ class CollaborationManager {
     } finally {
       this.isLoadingRooms = false;
     }
-    
+
     return this.unifiedRooms;
   }
 
@@ -218,38 +218,38 @@ class CollaborationManager {
         },
         credentials: 'include'
       })
-      .then(async response => {
-        clearTimeout(timeout);
-        
-        // Verificar si la respuesta es exitosa
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        // Verificar Content-Type para asegurar que es JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          // Intentar leer el texto para mostrar mejor información del error
-          const text = await response.text();
-          console.error(`Respuesta no-JSON del servidor ${this.serverUrl}${endpoint}:`, {
-            status: response.status,
-            statusText: response.statusText,
-            contentType,
-            bodyPreview: text.substring(0, 200)
-          });
-          throw new Error(`Respuesta no-JSON recibida. Status: ${response.status}`);
-        }
-        
-        // Parsear JSON solo después de verificar que es válido
-        return response.json();
-      })
-      .then(data => {
-        resolve(data);
-      })
-      .catch(error => {
-        console.error(`Error en fetchFromEndpoint ${endpoint}:`, error);
-        reject(error);
-      });
+        .then(async response => {
+          clearTimeout(timeout);
+
+          // Verificar si la respuesta es exitosa
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          // Verificar Content-Type para asegurar que es JSON
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            // Intentar leer el texto para mostrar mejor información del error
+            const text = await response.text();
+            console.error(`Respuesta no-JSON del servidor ${this.serverUrl}${endpoint}:`, {
+              status: response.status,
+              statusText: response.statusText,
+              contentType,
+              bodyPreview: text.substring(0, 200)
+            });
+            throw new Error(`Respuesta no-JSON recibida. Status: ${response.status}`);
+          }
+
+          // Parsear JSON solo después de verificar que es válido
+          return response.json();
+        })
+        .then(data => {
+          resolve(data);
+        })
+        .catch(error => {
+          console.error(`Error en fetchFromEndpoint ${endpoint}:`, error);
+          reject(error);
+        });
     });
   }
 
@@ -299,11 +299,11 @@ class CollaborationManager {
       },
       credentials: 'include'
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
+
     return response.json();
   }
 
@@ -320,7 +320,7 @@ class CollaborationManager {
       hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
-    
+
     const serverIndex = Math.abs(hash) % this.serverUrls.length;
     return this.serverUrls[serverIndex];
   }
@@ -351,7 +351,7 @@ class CollaborationManager {
 
     if (optimalServerUrl !== currentServerUrl) {
       console.log(`🎯 Cambiando a servidor óptimo para crear sala ${roomId}: ${optimalServerUrl}`);
-      
+
       // Cambiar al servidor óptimo
       const targetServerIndex = this.serverUrls.indexOf(optimalServerUrl);
       if (targetServerIndex !== -1) {
@@ -379,8 +379,7 @@ class CollaborationManager {
     if (this.currentRoom) {
       const action = this.isHost ? "elimina" : "sal de";
       this.showNotification(
-        `Ya estás en la sala "${this.currentRoom}". ${
-          action.charAt(0).toUpperCase() + action.slice(1)
+        `Ya estás en la sala "${this.currentRoom}". ${action.charAt(0).toUpperCase() + action.slice(1)
         } la sala actual primero.`,
         "error"
       );
@@ -396,7 +395,7 @@ class CollaborationManager {
 
     if (optimalServerUrl !== currentServerUrl) {
       console.log(`🎯 Cambiando a servidor óptimo para sala ${roomId}: ${optimalServerUrl}`);
-      
+
       // Cambiar al servidor óptimo
       const targetServerIndex = this.serverUrls.indexOf(optimalServerUrl);
       if (targetServerIndex !== -1) {
@@ -505,8 +504,7 @@ class CollaborationManager {
     this.serverUrl = this.serverUrls[this.currentServerIndex];
 
     console.log(
-      `🔄 Conectando a servidor: ${this.serverUrl} (intento ${
-        this.connectionAttempts + 1
+      `🔄 Conectando a servidor: ${this.serverUrl} (intento ${this.connectionAttempts + 1
       })`
     );
 
@@ -557,13 +555,13 @@ class CollaborationManager {
       }
 
       // Verificar errores específicos de conectividad
-      if (error.message.includes("websocket error") || 
-          error.message.includes("server with the specified hostname could not be found") ||
-          error.message.includes("getaddrinfo ENOTFOUND")) {
-        
+      if (error.message.includes("websocket error") ||
+        error.message.includes("server with the specified hostname could not be found") ||
+        error.message.includes("getaddrinfo ENOTFOUND")) {
+
         console.warn(`🌐 Servidor no disponible: ${this.serverUrl}`);
         this.showConnectionStatus(`Servidor no disponible`, "warning");
-        
+
         // Si no estamos en modo desarrollo, mostrar mensaje informativo
         if (!this.isDevelopmentMode()) {
           this.showNotification(
@@ -608,10 +606,10 @@ class CollaborationManager {
    * Verifica si estamos en modo desarrollo
    */
   isDevelopmentMode() {
-    return import.meta.env.MODE === 'development' || 
-           (typeof window !== "undefined" && 
-            (window.location.hostname === "localhost" ||
-             window.location.hostname === "127.0.0.1"));
+    return import.meta.env.MODE === 'development' ||
+      (typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1"));
   }
 
   /**
@@ -628,7 +626,7 @@ class CollaborationManager {
     // Verificar si hemos agotado todos los intentos
     if (this.connectionAttempts >= this.maxConnectionAttempts * this.serverUrls.length) {
       console.warn('🚫 Todos los servidores fallaron. Deteniendo intentos de reconexión.');
-      
+
       if (!this.isDevelopmentMode()) {
         this.showNotification(
           '🔌 No se puede conectar a ningún servidor. Verifica tu conexión o intenta más tarde.',
@@ -640,7 +638,7 @@ class CollaborationManager {
           'warning'
         );
       }
-      
+
       this.failoverInProgress = false;
       return;
     }
@@ -649,10 +647,9 @@ class CollaborationManager {
       // Intentar siguiente servidor
       this.currentServerIndex =
         (this.currentServerIndex + 1) % this.serverUrls.length;
-      
+
       console.log(
-        `🔄 Failover al servidor ${this.currentServerIndex + 1}: ${
-          this.serverUrls[this.currentServerIndex]
+        `🔄 Failover al servidor ${this.currentServerIndex + 1}: ${this.serverUrls[this.currentServerIndex]
         }`
       );
     }
@@ -846,7 +843,7 @@ class CollaborationManager {
     this.socket.on("rooms-list", (rooms) => {
       // Combinar salas del socket con salas unificadas cacheadas
       const combinedRooms = this.combineSocketRoomsWithUnified(rooms);
-      globalThis.collaborationPanel?.updateAvailableRooms?.(combinedRooms);
+      this.updateAvailableRooms(combinedRooms);
     });
 
     // Evento para salas unificadas
@@ -986,6 +983,7 @@ class CollaborationManager {
       roomId: roomId,
       userName: userName,
       password: password,
+      editor: this.editor.toJSON(), // Enviar estado inicial del editor
     });
 
     this.showNotification(`Creando sala: ${roomId}...`, "info");
@@ -1000,8 +998,7 @@ class CollaborationManager {
     if (this.currentRoom) {
       const action = this.isHost ? "elimina" : "sal de";
       this.showNotification(
-        `Ya estás en la sala "${this.currentRoom}". ${
-          action.charAt(0).toUpperCase() + action.slice(1)
+        `Ya estás en la sala "${this.currentRoom}". ${action.charAt(0).toUpperCase() + action.slice(1)
         } la sala actual primero.`,
         "error"
       );
@@ -1134,7 +1131,7 @@ class CollaborationManager {
         );
       },
 
-      () => {}
+      () => { }
     );
   }
 
@@ -1302,9 +1299,8 @@ class CollaborationManager {
     }
 
     if (count > 0) {
-      userCountElement.textContent = `👥 ${count} usuario${
-        count === 1 ? "" : "s"
-      }`;
+      userCountElement.textContent = `👥 ${count} usuario${count === 1 ? "" : "s"
+        }`;
       userCountElement.style.display = "block";
     } else {
       userCountElement.style.display = "none";
@@ -1398,7 +1394,7 @@ class CollaborationManager {
 
     // Actualizar UI
     globalThis.collaborationPanel?.updateAvailableRooms?.(enrichedRooms);
-    
+
     console.log('🏠 Salas actualizadas en UI:', enrichedRooms);
   }
 
@@ -1407,7 +1403,7 @@ class CollaborationManager {
    */
   getServerBadge(serverInstance) {
     const currentInstance = this.getCurrentServerInstance();
-    
+
     if (serverInstance === currentInstance) {
       return '🟢 Local';
     } else if (serverInstance && serverInstance !== 'local') {
@@ -1422,7 +1418,7 @@ class CollaborationManager {
    */
   getServerColor(serverInstance) {
     const currentInstance = this.getCurrentServerInstance();
-    
+
     if (serverInstance === currentInstance) {
       return '#28a745'; // Verde para servidor actual
     } else if (serverInstance && serverInstance !== 'local') {
@@ -1436,8 +1432,8 @@ class CollaborationManager {
    * Obtiene la instancia del servidor actual
    */
   getCurrentServerInstance() {
-    const port = this.serverUrl.includes('3001') ? 'server-1' : 
-                 this.serverUrl.includes('3002') ? 'server-2' : 'current';
+    const port = this.serverUrl.includes('3001') ? 'server-1' :
+      this.serverUrl.includes('3002') ? 'server-2' : 'current';
     return port;
   }
 
@@ -1454,22 +1450,25 @@ class CollaborationManager {
    */
   getRoomDisplayInfo(room) {
     const latency = this.serverLatencies.get(room.serverInstance);
+    // Always show latency, default to -- if undefined
+    const latencyText = latency !== undefined ? `${latency}ms` : '--ms';
+
     const isOptimal = this.isOptimalServerForRoom(room.id);
-    
+    const userCount = room.userCount || room.users || 0;
+
     let info = [];
-    
-    if (latency !== undefined && latency > 0) {
-      info.push(`${latency}ms`);
-    }
-    
+
+    // 1. Latency
+    info.push(latencyText);
+
+    // 2. User Count
+    info.push(`${userCount}👥`);
+
+    // 3. Status/Optimal
     if (isOptimal) {
       info.push('⚡ Óptimo');
     }
-    
-    if (room.userCount > 0) {
-      info.push(`${room.userCount}👥`);
-    }
-    
+
     return info.join(' • ');
   }
 

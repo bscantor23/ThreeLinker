@@ -617,54 +617,36 @@ function createRoomItem(room, collaborationManager, roomInput) {
   const roomIdElement = document.createElement("div");
   roomIdElement.className = `room-id ${room.isProtected ? "protected" : ""}`;
 
-  // Agregar badge de servidor si está disponible
+  // Texto básico del ID
+  let idText = roomId + (room.isProtected ? " 🔒" : "");
+  roomIdElement.textContent = idText;
+
+  // Badge de servidor al lado del nombre si se desea, o dejarlo limpio
   if (room.serverBadge) {
     const serverBadge = document.createElement("span");
     serverBadge.className = `server-badge ${room.serverBadge.toLowerCase().replace(' ', '-')}`;
     serverBadge.textContent = room.serverBadge;
-    serverBadge.title = `Sala en ${room.serverInstance || 'servidor desconocido'}`;
-    roomIdElement.appendChild(document.createTextNode(roomId + (room.isProtected ? " 🔒" : "")));
     roomIdElement.appendChild(serverBadge);
-  } else {
-    roomIdElement.textContent = roomId + (room.isProtected ? " 🔒" : "");
   }
 
   roomHeader.appendChild(roomIdElement);
-
-  // Indicador de latencia si está disponible
-  if (room.serverLatency !== undefined && room.serverLatency > 0) {
-    const latencyIndicator = document.createElement("span");
-    const latencyClass = room.serverLatency < 50 ? "excellent" :
-      room.serverLatency < 100 ? "good" :
-        room.serverLatency < 200 ? "fair" : "poor";
-    latencyIndicator.className = `latency-indicator ${latencyClass}`;
-    latencyIndicator.textContent = `${room.serverLatency}ms`;
-    latencyIndicator.title = `Latencia al servidor: ${room.serverLatency}ms`;
-    roomHeader.appendChild(latencyIndicator);
-  }
-
   roomItem.appendChild(roomHeader);
 
-  // Información de la sala
+  // Información de la sala (Metadata en una sola línea)
   const roomInfo = document.createElement("div");
   roomInfo.className = "room-info";
 
-  const userCount = room.userCount || room.users || 0;
-  const isProtected = room.isProtected || false;
-
-  const roomStats = document.createElement("div");
-  roomStats.className = "room-stats";
-  const protectionText = isProtected ? " • Protegida" : "";
-  roomStats.textContent = `${userCount} usuario${userCount === 1 ? "" : "s"
-    }${protectionText}`;
-  roomInfo.appendChild(roomStats);
-
-  // Información adicional de display si está disponible
+  // Usar displayInfo unificado que viene del manager
   if (room.displayInfo) {
     const displayInfo = document.createElement("div");
     displayInfo.className = "room-display-info";
-    displayInfo.innerHTML = room.displayInfo;
+    // Asegurar que no haya saltos de línea, usar flex o inline-block en CSS si es necesario
+    displayInfo.textContent = room.displayInfo;
     roomInfo.appendChild(displayInfo);
+  } else {
+    // Fallback por si no hay displayInfo (no debería pasar con el fix)
+    const userCount = room.userCount || 0;
+    roomInfo.textContent = `${userCount}👥`;
   }
 
   roomItem.appendChild(roomInfo);

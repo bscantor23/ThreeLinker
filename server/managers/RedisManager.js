@@ -22,14 +22,14 @@ class RedisManager {
     this.isConnected = false;
     this.fallbackToMemory = true;
     this.memoryCache = new Map();
-    
+
     this.initializeRedis();
   }
 
   async initializeRedis() {
     try {
       this.redis = new Redis(this.config);
-      
+
       this.redis.on('connect', () => {
         this.isConnected = true;
         this.fallbackToMemory = false;
@@ -59,6 +59,19 @@ class RedisManager {
 
       // Intentar conexión inicial
       await this.redis.connect();
+
+      // Inicializar conexión dedicada para suscripciones
+      this.subRedis = this.redis.duplicate();
+
+      this.subRedis.on('connect', () => {
+        logServerEvent('REDIS_SUB_CONNECTED', null, { message: 'Conexión Redis Pub/Sub establecida' });
+      });
+
+      this.subRedis.on('error', (error) => {
+        logServerEvent('REDIS_SUB_ERROR', null, { error: error.message });
+      });
+
+      await this.subRedis.connect();
     } catch (error) {
       this.fallbackToMemory = true;
       logServerEvent('REDIS_INIT_FAILED', null, {
@@ -89,7 +102,7 @@ class RedisManager {
    */
   async set(key, value, ttlSeconds = 3600) {
     const serializedValue = JSON.stringify(value);
-    
+
     if (this.isConnected && !this.fallbackToMemory) {
       try {
         if (ttlSeconds > 0) {
@@ -103,10 +116,10 @@ class RedisManager {
         return;
       }
     }
-    
+
     // Fallback o backup en memoria
     this.memoryCache.set(key, value);
-    
+
     // Simular TTL en memoria si está especificado
     if (ttlSeconds > 0) {
       setTimeout(() => {
@@ -142,7 +155,7 @@ class RedisManager {
         logServerEvent('REDIS_KEYS_ERROR', null, { pattern, error: error.message });
       }
     }
-    
+
     // Fallback: filtrar claves de memoria
     const memoryKeys = Array.from(this.memoryCache.keys());
     const regex = new RegExp(pattern.replace(/\*/g, '.*'));
@@ -164,7 +177,7 @@ class RedisManager {
         logServerEvent('REDIS_INCR_ERROR', null, { key, error: error.message });
       }
     }
-    
+
     // Fallback en memoria
     const current = this.memoryCache.get(key) || 0;
     const newValue = current + 1;
@@ -184,14 +197,14 @@ class RedisManager {
         logServerEvent('REDIS_HGET_ERROR', null, { key, field, error: error.message });
       }
     }
-    
+
     const hash = this.memoryCache.get(key);
     return hash && hash[field] ? hash[field] : null;
   }
 
   async hset(key, field, value, ttlSeconds = 3600) {
     const serializedValue = JSON.stringify(value);
-    
+
     if (this.isConnected && !this.fallbackToMemory) {
       try {
         await this.redis.hset(key, field, serializedValue);
@@ -202,7 +215,7 @@ class RedisManager {
         logServerEvent('REDIS_HSET_ERROR', null, { key, field, error: error.message });
       }
     }
-    
+
     // Fallback en memoria
     let hash = this.memoryCache.get(key) || {};
     hash[field] = value;
@@ -226,7 +239,7 @@ class RedisManager {
         logServerEvent('REDIS_HGETALL_ERROR', null, { key, error: error.message });
       }
     }
-    
+
     return this.memoryCache.get(key) || {};
   }
 
@@ -246,6 +259,43 @@ class RedisManager {
     };
   }
 
+  /**
+   * Publica un mensaje en un canal
+   */
+  async publish(channel, message) {
+    if (this.isConnected && !this.fallbackToMemory) {
+      try {
+        const serializedMessage = typeof message === 'object' ? JSON.stringify(message) : message;
+        await this.redis.publish(channel, serializedMessage);
+      } catch (error) {
+        logServerEvent('REDIS_PUB_ERROR', null, { channel, error: error.message });
+      }
+    }
+  }
+
+  /**
+   * Suscribe a un canal
+   */
+  async subscribe(channel, callback) {
+    if (this.isConnected && !this.fallbackToMemory) {
+      try {
+        await this.subRedis.subscribe(channel);
+        this.subRedis.on('message', (ch, message) => {
+          if (ch === channel) {
+            try {
+              const parsedMessage = JSON.parse(message);
+              callback(parsedMessage);
+            } catch {
+              callback(message);
+            }
+          }
+        });
+      } catch (error) {
+        logServerEvent('REDIS_SUB_ERROR', null, { channel, error: error.message });
+      }
+    }
+  }
+
   // ===== GESTIÓN GLOBAL DE SALAS =====
 
   /**
@@ -263,7 +313,7 @@ class RedisManager {
       isProtected: roomData.isProtected || false,
       serverInstance: process.env.INSTANCE_ID || 'unknown'
     };
-    
+
     await this.hset(key, roomId, roomInfo, 86400); // TTL 24 horas
     logServerEvent('ROOM_REGISTERED', null, { roomId, server: roomInfo.serverInstance });
   }
@@ -274,7 +324,7 @@ class RedisManager {
   async updateRoomInGlobalList(roomId, updates) {
     const key = 'global:rooms';
     const currentRoom = await this.hget(key, roomId);
-    
+
     if (currentRoom) {
       const updatedRoom = {
         ...currentRoom,
@@ -291,12 +341,12 @@ class RedisManager {
    */
   async getAllGlobalRooms() {
     const key = 'global:rooms';
-    
+
     if (this.isConnected && !this.fallbackToMemory) {
       try {
         const roomsHash = await this.redis.hgetall(key);
         const rooms = [];
-        
+
         for (const [roomId, roomDataStr] of Object.entries(roomsHash)) {
           try {
             const roomData = JSON.parse(roomDataStr);
@@ -305,14 +355,14 @@ class RedisManager {
             logServerEvent('PARSE_ROOM_ERROR', null, { roomId, error: error.message });
           }
         }
-        
+
         // Ordenar por actividad más reciente
         return rooms.sort((a, b) => b.lastActivity - a.lastActivity);
       } catch (error) {
         logServerEvent('GET_GLOBAL_ROOMS_ERROR', null, { error: error.message });
       }
     }
-    
+
     // Fallback: devolver salas locales de memoria
     const hash = this.memoryCache.get(key) || {};
     return Object.values(hash).sort((a, b) => b.lastActivity - a.lastActivity);
@@ -323,7 +373,7 @@ class RedisManager {
    */
   async removeRoomFromGlobalList(roomId) {
     const key = 'global:rooms';
-    
+
     if (this.isConnected && !this.fallbackToMemory) {
       try {
         await this.redis.hdel(key, roomId);
@@ -346,11 +396,11 @@ class RedisManager {
     const key = 'global:rooms';
     const cutoffTime = Date.now() - (60 * 60 * 1000); // 1 hora
     let cleanedCount = 0;
-    
+
     if (this.isConnected && !this.fallbackToMemory) {
       try {
         const roomsHash = await this.redis.hgetall(key);
-        
+
         for (const [roomId, roomDataStr] of Object.entries(roomsHash)) {
           try {
             const roomData = JSON.parse(roomDataStr);
@@ -378,11 +428,11 @@ class RedisManager {
       }
       this.memoryCache.set(key, hash);
     }
-    
+
     if (cleanedCount > 0) {
       logServerEvent('GLOBAL_ROOMS_CLEANUP', null, { cleanedCount });
     }
-    
+
     return cleanedCount;
   }
 

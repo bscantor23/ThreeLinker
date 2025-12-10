@@ -68,7 +68,7 @@ async function initializeCollaboration() {
     // Agregar panel de colaboración al sidebar después de un breve delay
     setTimeout(async () => {
       try {
-        const { default: CollaborationPanel } = await import(
+        const { CollaborationPanel } = await import(
           "./CollaborationPanel.js"
         );
         const collaborationPanel = CollaborationPanel(

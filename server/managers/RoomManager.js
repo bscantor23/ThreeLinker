@@ -13,10 +13,37 @@ class RoomManager {
     this.keyPrefix = REDIS_CONFIG.KEYS.ROOM;
     this.userRoomPrefix = REDIS_CONFIG.KEYS.USER_ROOM;
     this.roomUsersPrefix = REDIS_CONFIG.KEYS.ROOM_USERS;
+
+    // Inicializar suscripciones
+    this.setupSubscriptions();
+  }
+
+  setupSubscriptions() {
+    this.redis.subscribe('linker:events:rooms', (message) => {
+      if (message.type === 'ROOM_DELETED') {
+        this.handleRemoteRoomDeletion(message.roomId);
+      }
+    });
+  }
+
+  handleRemoteRoomDeletion(roomId) {
+    if (this.rooms.has(roomId)) {
+      logServerEvent('ROOM_SYNC_DELETE', roomId, { message: 'Eliminando sala por evento remoto' });
+      // Notificar a usuarios locales si es necesario
+      this.rooms.delete(roomId);
+    }
   }
 
   /**
    * Crea una nueva sala con la información proporcionada
+   * ... (rest of createRoom) ... (Wait, I need to match the target content carefully)
+
+// Wait, the replacement chunk is messy if I try to splice the constructor.
+// I will just add the setupSubscriptions call in constructor and define the methods.
+// And then modify deleteRoom separately.
+
+// Let's modify constructor first.
+
    * @param {string} roomId - ID único de la sala
    * @param {string} hostId - ID del usuario anfitrión
    * @param {string} hostName - Nombre del anfitrión
@@ -53,8 +80,8 @@ class RoomManager {
 
     // Guardar en Redis con TTL
     await this.redis.set(
-      `${this.keyPrefix}${roomId}`, 
-      roomData, 
+      `${this.keyPrefix}${roomId}`,
+      roomData,
       REDIS_CONFIG.TTL.ROOM
     );
 
@@ -70,8 +97,8 @@ class RoomManager {
 
     // Establecer relación user -> room
     await this.redis.set(
-      `${this.userRoomPrefix}${hostId}`, 
-      roomId, 
+      `${this.userRoomPrefix}${hostId}`,
+      roomId,
       REDIS_CONFIG.TTL.USER
     );
 
@@ -137,7 +164,7 @@ class RoomManager {
   async getRoom(roomId) {
     // Verificar cache local primero
     let room = this.rooms.get(roomId);
-    
+
     if (!room) {
       // Cargar desde Redis si no está en cache
       const redisData = await this.redis.get(`${this.keyPrefix}${roomId}`);
@@ -147,12 +174,12 @@ class RoomManager {
           ...redisData,
           users: new Map(Object.entries(redisData.users || {}))
         };
-        
+
         // Agregar a cache local
         this.rooms.set(roomId, room);
       }
     }
-    
+
     return room || null;
   }
 
@@ -197,22 +224,22 @@ class RoomManager {
       ...room,
       users: Object.fromEntries(room.users)
     };
-    
+
     await this.redis.set(
-      `${this.keyPrefix}${roomId}`, 
-      roomDataForRedis, 
+      `${this.keyPrefix}${roomId}`,
+      roomDataForRedis,
       REDIS_CONFIG.TTL.ROOM
     );
 
     // Actualizar contador de usuarios en la lista global
-    await this.redis.updateRoomInGlobalList(roomId, { 
-      userCount: room.users.size 
+    await this.redis.updateRoomInGlobalList(roomId, {
+      userCount: room.users.size
     });
 
     // Establecer relación user -> room
     await this.redis.set(
-      `${this.userRoomPrefix}${userId}`, 
-      roomId, 
+      `${this.userRoomPrefix}${userId}`,
+      roomId,
       REDIS_CONFIG.TTL.USER
     );
     this.updateRoomActivity(roomId);
@@ -251,19 +278,33 @@ class RoomManager {
     const room = await this.getRoom(roomId);
     if (!room) return null;
 
+    // Desvincular usuarios de la sala
+    const users = this.getRoomUsers(roomId);
+    for (const user of users) {
+      // Eliminar mapeo user -> room
+      await this.redis.del(`${this.userRoomPrefix}${user.id}`);
+    }
+
+    // Publicar evento de eliminación para sincronización entre servidores
+    await this.redis.publish('linker:events:rooms', {
+      type: 'ROOM_DELETED',
+      roomId
+    });
+
     // Eliminar de Redis
     await this.redis.del(`${this.keyPrefix}${roomId}`);
-    
+
     // Eliminar de la lista global
     await this.redis.removeRoomFromGlobalList(roomId);
 
     // Eliminar del cache local
     this.rooms.delete(roomId);
-    
-    logServerEvent('ROOM_DELETED_FROM_GLOBAL', roomId, {
-      serverInstance: process.env.INSTANCE_ID || 'unknown'
+
+    logServerEvent('ROOM_DELETED', roomId, {
+      serverInstance: process.env.INSTANCE_ID || 'unknown',
+      usersUnlinked: users.length
     });
-    
+
     return room;
   }
 
@@ -331,7 +372,7 @@ class RoomManager {
     try {
       // Intentar obtener de Redis primero (incluye todas las instancias)
       const globalRooms = await this.redis.getAllGlobalRooms();
-      
+
       if (globalRooms && globalRooms.length > 0) {
         // Enriquecer con información del servidor y estado de conexión
         const enrichedRooms = globalRooms.map(room => ({
@@ -342,16 +383,16 @@ class RoomManager {
           timeSinceActivity: Date.now() - (room.lastActivity || Date.now()),
           displayName: this.generateDisplayName(room.id, room.serverInstance)
         }));
-        
+
         return enrichedRooms.sort((a, b) => b.lastActivity - a.lastActivity);
       }
     } catch (error) {
-      logServerEvent('GET_GLOBAL_ROOMS_ERROR', null, { 
+      logServerEvent('GET_GLOBAL_ROOMS_ERROR', null, {
         error: error.message,
-        fallbackToLocal: true 
+        fallbackToLocal: true
       });
     }
-    
+
     // Fallback: devolver solo salas locales si Redis falla
     const activeRooms = Array.from(this.rooms.entries()).map(
       ([roomId, data]) => ({
@@ -382,7 +423,7 @@ class RoomManager {
    */
   getServerUrlForRoom(roomId) {
     if (!roomId) return this.getDefaultServerUrl();
-    
+
     // Determinar servidor basado en roomId hash (sticky routing)
     let hash = 0;
     for (let i = 0; i < roomId.length; i++) {
@@ -390,10 +431,10 @@ class RoomManager {
       hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
-    
+
     const serverIndex = Math.abs(hash) % 2; // Asumiendo 2 servidores
     const isLocal = process.env.NODE_ENV === 'development';
-    
+
     if (isLocal) {
       return serverIndex === 0 ? 'http://localhost:3001' : 'http://localhost:3002';
     } else {
@@ -409,7 +450,7 @@ class RoomManager {
   getDefaultServerUrl() {
     const isLocal = process.env.NODE_ENV === 'development';
     const port = process.env.PORT || 3001;
-    
+
     if (isLocal) {
       return `http://localhost:${port}`;
     } else {

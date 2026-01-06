@@ -1,202 +1,72 @@
 # ThreeLinker
 
-Servidor público: https://linker.genodev.com.co/
+Public server: https://linker.genodev.com.co/
 
-ThreeLinker es un editor de Three.js con capacidades de colaboración en tiempo real. Es una versión standalone del editor oficial de Three.js que permite a múltiples usuarios trabajar juntos en escenas 3D de forma simultánea.
+ThreeLinker is a Three.js editor with real-time collaboration capabilities. It is a standalone version of the official Three.js editor that allows multiple users to work together on 3D scenes simultaneously.
 
 ![ThreeLinker Editor](images/Captura_1.png)
 
+## 🌟 Key Features
 
+### Full 3D Editor
+- **Interactive visual editor** to create and edit 3D scenes
+- **Real-time viewport** with intuitive camera controls
+- **Properties panel** to modify objects, materials, and geometries
+- **Scripting system** with integrated code editor (CodeMirror)
+- **Command history** with undo/redo functionality
+- **Import/Export** of models and scenes
 
-## 🌟 Características Principales
+### Supported Geometries
+- Basic geometries: Box, Sphere, Cylinder, Plane, etc.
+- Advanced geometries: Torus, Dodecahedron, Icosahedron, etc.
+- Custom geometries: Extrude, Lathe, Tube, Shape, etc.
+- Geometry modifiers
 
-### Editor 3D Completo
-- **Editor visual interactivo** para crear y editar escenas 3D
-- **Viewport en tiempo real** con controles de cámara intuitivos
-- **Panel de propiedades** para modificar objetos, materiales y geometrías
-- **Sistema de scripts** con editor de código integrado (CodeMirror)
-- **Historial de comandos** con funcionalidad de deshacer/rehacer
-- **Importación/Exportación** de modelos y escenas
+### Materials and Shaders
+- Standard Three.js materials
+- Integrated GLSL shader editor
+- Material properties system
+- Texture and map support
 
-### Geometrías Soportadas
-- Geometrías básicas: Box, Sphere, Cylinder, Plane, etc.
-- Geometrías avanzadas: Torus, Dodecahedron, Icosahedron, etc.
-- Geometrías personalizadas: Extrude, Lathe, Tube, Shape, etc.
-- Modificadores de geometría
+### 🤝 Real-Time Collaboration
+- **Collaboration rooms** – Create or join rooms to work as a team
+- **Automatic synchronization** – All changes are instantly synchronized
+- **Collaborative cursors** – See where other users are working
+- **Integrated chat** – Communicate with your team while working
+- **User management** – Name and role system
+- **Connection states** – Visual information about collaboration status
 
-### Materiales y Shaders
-- Materiales estándar de Three.js
-- Editor de shaders GLSL integrado
-- Sistema de propiedades de materiales
-- Soporte para texturas y mapas
+## 🚀 Installation and Usage
 
-### 🤝 Colaboración en Tiempo Real
-- **Salas de colaboración** - Crea o únete a salas para trabajar en equipo
-- **Sincronización automática** - Todos los cambios se sincronizan instantáneamente
-- **Cursores colaborativos** - Ve dónde están trabajando otros usuarios
-- **Chat integrado** - Comunícate con tu equipo mientras trabajas
-- **Gestión de usuarios** - Sistema de nombres y roles
-- **Estados de conexión** - Información visual del estado de la colaboración
+### Prerequisites
+- Node.js (version 18 or higher)
+- Docker and Docker Compose (for production mode)
+- Redis (optional, in-memory fallback available)
 
-## 🚀 Instalación y Uso
+### Installation
 
-### Requisitos Previos
-- Node.js (versión 18 o superior)
-- Docker y Docker Compose (para modo producción)
-- Redis (opcional, usa fallback en memoria)
-
-### Instalación
-
-1. Clona el repositorio:
+1. Clone the repository:
 ```bash
 git clone https://github.com/bscantor23/ThreeLinker.git
 cd ThreeLinker
-```
 
-2. Instala las dependencias:
-```bash
-npm install
-```
-
-3. Configura el entorno:
-```bash
-cp .env.example .env
-# Edita .env según tu configuración
-```
-
-### Modos de Ejecución
-
-#### Desarrollo Local (Modo Simple)
-```bash
-npm run dev:full
-```
-Abre http://localhost:5173 en tu navegador.
-
-#### Alta Disponibilidad (Producción)
-```bash
-# Iniciar toda la arquitectura con Docker
-npm run docker:start
-
-# Ver logs
-npm run docker:logs
-
-# Detener servicios
-npm run docker:stop
-```
-
-#### Desarrollo con Alta Disponibilidad
-```bash
-# Servidor 1
-npm run server:3001
-
-# Servidor 2 (en otra terminal)
-npm run server:3002
-
-# Frontend (en otra terminal)
-npm run dev
-```
-
-Abre http://localhost:5173 en tu navegador y disfruta de la colaboración en tiempo real.
-
-## 🛠️ Tecnologías Utilizadas
-
-### Frontend
-- **Three.js** - Biblioteca principal para gráficos 3D
-- **Vite** - Bundler y servidor de desarrollo
-- **Socket.IO Client** - Comunicación en tiempo real
-- **HTML5/CSS3/JavaScript ES6+**
-
-### Backend
-- **Node.js** - Runtime del servidor
-- **Express** - Framework web
-- **Socket.IO** - WebSockets para tiempo real
-- **Sistema de gestión de salas y usuarios**
-
-### Bibliotecas Adicionales
-- **three-gpu-pathtracer** - Renderizado avanzado
-- **three-mesh-bvh** - Optimización de mallas
-- **FFmpeg.js** - Procesamiento de video
-- **Signals** - Sistema de eventos
-
-## 📁 Estructura del Proyecto
-
-```
 three-linker/
-├── js/                         # Código principal del editor
-│   ├── Editor.js              # Clase principal del editor
-│   ├── Viewport.js            # Viewport 3D
-│   ├── Sidebar.js             # Panel lateral
-│   ├── Menubar.js             # Barra de menús
-│   ├── CollaborationManager.js # Gestión de colaboración
-│   ├── CollaborationPanel.js  # Panel de colaboración
-│   └── ...                    # Otros módulos
-├── server/                     # Servidor de colaboración
-│   ├── collaborationServer.js # Configuración principal
-│   ├── managers/              # Gestores de salas, usuarios, etc.
-│   ├── handlers/              # Manejadores de eventos
-│   └── utils/                 # Utilidades del servidor
-├── css/                       # Estilos
-├── examples/                  # Escenas de ejemplo
-├── images/                    # Recursos gráficos
-├── index.html                 # Página principal
-├── server.js                  # Punto de entrada del servidor
-└── package.json              # Configuración del proyecto
-```
-
-## 🎮 Ejemplos Incluidos
-
-El proyecto incluye varios ejemplos pre-configurados:
-- **particles.app.json** - Sistema de partículas
-- **pong.app.json** - Juego Pong clásico
-- **arkanoid.app.json** - Juego tipo Breakout
-- **camera.app.json** - Demostraciones de cámara
-- **shaders.app.json** - Ejemplos de shaders
-
-## 🤝 Funcionalidades de Colaboración
-
-### Creación de Salas
-- Crea salas públicas o privadas
-- Configuración de límites de usuarios
-- Gestión de permisos
-
-### Sincronización
-- Sincronización automática de:
-  - Objetos 3D y transformaciones
-  - Materiales y texturas
-  - Scripts y animaciones
-  - Configuración de escena
-
-### Comunicación
-- Chat en tiempo real
-- Notificaciones de acciones
-- Estados de usuarios conectados
-
-## 🎯 Casos de Uso
-
-- **Educación**: Enseñanza de gráficos 3D y programación
-- **Prototipado**: Creación rápida de prototipos 3D
-- **Colaboración remota**: Trabajo en equipo en proyectos 3D
-- **Desarrollo de juegos**: Diseño de niveles y assets
-- **Visualización de datos**: Creación de gráficos 3D interactivos
-
-## 📝 Licencia
-
-MIT - Ver archivo LICENSE para más detalles.
-
-## 🙏 Créditos
-
-Basado en el editor oficial de Three.js por **mrdoob** y la comunidad de Three.js.
-
-Funcionalidades de colaboración desarrolladas para permitir trabajo en equipo en tiempo real.
-
-## 🐛 Problemas y Contribuciones
-
-Si encuentras algún problema o quieres contribuir:
-1. Abre un issue describiendo el problema
-2. Fork el proyecto
-3. Crea una rama para tu feature
-4. Envía un pull request
-
----
-
-¡Disfruta creando experiencias 3D colaborativas con ThreeLinker! 🚀✨
+├── js/                          # Main editor code
+│   ├── Editor.js               # Core editor class
+│   ├── Viewport.js             # 3D viewport
+│   ├── Sidebar.js              # Side panel
+│   ├── Menubar.js              # Menu bar
+│   ├── CollaborationManager.js # Collaboration management
+│   ├── CollaborationPanel.js   # Collaboration UI panel
+│   └── ...                     # Other modules
+├── server/                      # Collaboration server
+│   ├── collaborationServer.js  # Main server configuration
+│   ├── managers/               # Room, user managers, etc.
+│   ├── handlers/               # Event handlers
+│   └── utils/                  # Server utilities
+├── css/                        # Styles
+├── examples/                   # Example scenes
+├── images/                     # Graphic assets
+├── index.html                  # Main page
+├── server.js                   # Server entry point
+└── package.json               # Project configuration

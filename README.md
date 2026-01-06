@@ -70,3 +70,29 @@ three-linker/
 ├── index.html                  # Main page
 ├── server.js                   # Server entry point
 └── package.json               # Project configuration
+```
+
+### Commands
+```bash
+npm install
+
+npm run dev:full
+
+# Start the full architecture with Docker
+npm run docker:start
+
+# View logs
+npm run docker:logs
+
+# Stop services
+npm run docker:stop
+
+# Server 1
+npm run server:3001
+
+# Server 2 (in another terminal)
+npm run server:3002
+
+# Frontend (in another terminal)
+npm run dev
+```
